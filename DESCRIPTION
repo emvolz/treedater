@@ -1,0 +1,10 @@
+Package: treedater
+Type: Package
+Title: Fast molecular clock dating of phylogenetic trees with rate variation
+Version: 1.0
+Date: 2016-11-29
+Author: Erik M Volz
+Maintainer: Erik M Volz <erik.volz@gmail.com>
+Description:Fast molecular clock dating of phylogenetic trees with rate variation. 
+License: GPL
+Depends: ape
