@@ -184,6 +184,10 @@ treedater = dater <- function(tre, sts, s=1e3
 	THETA_LB <- 1e-3
 	scale_var_by_rate <- TRUE
 	cc <- 10
+	if (is.null(names(sts))){
+		names(sts) <- tre$tip.label
+	}
+	sts <- sts[tre$tip.label]
 	if (!is.rooted(tre)){
 		tre <- rtt( tre , sts)
 	}
