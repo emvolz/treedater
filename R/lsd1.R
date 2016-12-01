@@ -98,6 +98,14 @@ require(ape)
 		B <- B * td$s
 		return( coef( lm ( B ~ A -1 , weights = 1 / (td$s*blen*omegas) ) ) )
 }
+.Ti.ll1 <-  function( omegas, Ti, td ){
+	blen <- .Ti2blen( Ti, td )
+	A <- omegas * td$s *  td$A0 
+	B <- td$B0 
+	B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
+	B <- B * td$s
+	sum( dnorm( (B - A %*% Ti ), mean=0 , sd=sqrt((td$s*blen*omegas))  , log = T) )
+}
 
 .optim.omegas.gammaPoisson0 <- function( Ti, r, gammatheta, td )
 {
@@ -169,7 +177,8 @@ require(ape)
 treedater = dater <- function(tre, sts, s=1e3
  , omega0 = NA
  , minblen = NA
- , maxit=20
+ , maxit=30
+ , abstol = .01
 )
 { 
 	THETA_LB <- 1e-3
@@ -199,18 +208,18 @@ treedater = dater <- function(tre, sts, s=1e3
 	r0 = r <- omega0 * td$s / gammatheta0
 	
 	done <- FALSE
-	#lastll <- -Inf
+	lastll <- -Inf
 	iter <- 0
 	nEdges <- nrow(tre$edge)
 	omegas <- rep( omega0,  nEdges )
 	.trace <- list()
 	while(!done){
-		if (iter == 0){
-			Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
-		} else{
-			Ti <- .optim.Ti1( omegas, Ti, td )
-		}
-		#Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
+		#if (iter == 0){
+		#	Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
+		#} else{
+		#	Ti <- .optim.Ti1( omegas, Ti, td )
+		#}
+		Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
 		#Ti <- .hack.times( Ti, td ) # TODO unclear if this helps
 		
 		if (gammatheta < THETA_LB){
@@ -231,6 +240,9 @@ treedater = dater <- function(tre, sts, s=1e3
 		#i <- (iter %% length(omegas))+1
 		#omegas[i] <- .optim.omega_i.gammaPoisson0( Ti, o$r, o$gammatheta, td, i ) 
 		
+		ti_ll <- .Ti.ll1( omegas, Ti, td ) #
+		ll <- ll + ti_ll
+		
 		cat('iter, omegas, T, r, theta, logLik\n')
 		print(c( iter))
 		print(summary(omegas))
@@ -244,24 +256,12 @@ treedater = dater <- function(tre, sts, s=1e3
 		
 		# check convergence
 		iter <- iter + 1
-		#if (ll < lastll) 
-		if (F){
-			#warning('Likelihood did not improve. Possible convergence failure.')
-			done <- TRUE
-			omegas <- .omegas
-			r <- .r
-			gammatheta <- .gammatheta
-			Ti <- .Ti 
-			ll <- .ll
-		}
 		if (iter > maxit) done <- TRUE
-		#if ( (ll > lastll) & (ll - lastll) < abstol) done <- TRUE
-		#~ 		lastll <- ll
-		#~ 		.omegas <- omegas
-		#~ 		.r <- r
-		#~ 		.gammatheta <- gammatheta
-		#~ 		.Ti <- Ti
-		#~ 		.ll <- ll
+		
+		if ( abs( ll - lastll ) < abstol) done <- TRUE
+		if (ll < lastll) done <- TRUE
+		
+		lastll <- ll
 	}
 	i <- which.max( sapply( .trace, function(x) x$loglik) )
 	rv <- .trace[[i]]
