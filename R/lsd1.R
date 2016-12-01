@@ -265,7 +265,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	}
 	i <- which.max( sapply( .trace, function(x) x$loglik) )
 	rv <- .trace[[i]]
-	blen <- .Ti2blen( rv$Ti, td )
+	td$minblen <- -Inf; blen <- .Ti2blen( rv$Ti, td )
 	tre$edge.length <- blen 
 	#rv$trace <- .trace
 	rv$tre <- tre
