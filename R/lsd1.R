@@ -179,6 +179,7 @@ treedater = dater <- function(tre, sts, s=1e3
  , minblen = NA
  , maxit=30
  , abstol = .01
+ , searchRoot = 1
 )
 { 
 	THETA_LB <- 1e-3
@@ -189,7 +190,11 @@ treedater = dater <- function(tre, sts, s=1e3
 	}
 	sts <- sts[tre$tip.label]
 	if (!is.rooted(tre)){
-		tre <- rtt( tre , sts)
+		rtres <- .multi.rtt(tre, sts, topx=searchRoot)
+		tds <- lapply( rtres, function(t) dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol) )
+		lls <- sapply( tds, function(td) td$loglik )
+		return ( tds [[ which.max( lls ) ]] )
+		#tre <- rtt( tre , sts)
 	}
 	sts <- sts[tre$tip.label]
 	if (is.na(minblen)){
@@ -275,5 +280,3 @@ treedater = dater <- function(tre, sts, s=1e3
 	rv$tre <- tre
 	rv
 }
-
-
