@@ -179,7 +179,8 @@ treedater = dater <- function(tre, sts, s=1e3
  , minblen = NA
  , maxit=30
  , abstol = .01
- , searchRoot = 1
+ , searchRoot = 3
+ , quiet = FALSE
 )
 { 
 	THETA_LB <- 1e-3
@@ -190,11 +191,15 @@ treedater = dater <- function(tre, sts, s=1e3
 	}
 	sts <- sts[tre$tip.label]
 	if (!is.rooted(tre)){
+		if (!quiet) cat( 'Tree is not rooted. Searching for best root position. Increase searchRoot to try harder.\n')
+		searchRoot <- round(searchRoot )
 		rtres <- .multi.rtt(tre, sts, topx=searchRoot)
 		tds <- lapply( rtres, function(t) dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol) )
 		lls <- sapply( tds, function(td) td$loglik )
 		return ( tds [[ which.max( lls ) ]] )
 		#tre <- rtt( tre , sts)
+	} else{
+		if (!quiet) cat( 'Tree is rooted. Not estimating root position.\n')
 	}
 	sts <- sts[tre$tip.label]
 	if (is.na(minblen)){
@@ -205,8 +210,10 @@ treedater = dater <- function(tre, sts, s=1e3
 		n <- length( tre$tip.label)
 		d2root <- setNames(  dist.nodes( tre )[(n+1),1:n], tre$tip.label)
 		omega0 <- coef( lm( d2root ~ sts) )[2]
-		cat('initial rate:\n')
-		print(omega0)
+		if (!quiet){
+			cat('initial rate:\n')
+			print(omega0)
+		}
 	}
 	td <- .make.tree.data(tre, sts, s, cc )
 	td$minblen <- minblen
@@ -252,13 +259,16 @@ treedater = dater <- function(tre, sts, s=1e3
 		ti_ll <- .Ti.ll1( omegas, Ti, td ) #
 		ll <- ll + ti_ll
 		
-		cat('iter, omegas, T, r, theta, logLik\n')
-		print(c( iter))
-		print(summary(omegas))
-		print(summary(Ti))
-		print( r)
-		print( gammatheta)
-		print( ll)
+		if (!quiet)
+		{
+			cat('iter, omegas, T, r, theta, logLik\n')
+			print(c( iter))
+			print(summary(omegas))
+			print(summary(Ti))
+			print( r)
+			print( gammatheta)
+			print( ll)
+		}
 		.trace[[length(.trace)+1]] <- list( omegas = omegas, r = r, theta = gammatheta, Ti = Ti
 		 , meanRate = .mean.rate(Ti, r, gammatheta, omegas, td)
 		 , loglik = ll )
@@ -278,5 +288,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	tre$edge.length <- blen 
 	#rv$trace <- .trace
 	rv$tre <- tre
+	rv$timeOfMRCA <- min(rv$Ti)
+	rv$timeToMRCA <- max(sts) - rv$timeOfMRCA
 	rv
 }

@@ -7,7 +7,7 @@ Dating of phylogenetic trees with rate variation.
 Estimates the calendar time of the given phylogenetic tree with branches in units of substitutions per site. The calendar time of each sample must also be specified and the length of the sequences used to estimate the tree. 
 }
 \usage{
-dater(tre, sts, s = 1000, omega0 = NA, minblen = NA, maxit = 20)
+dater(tre, sts, s = 1000, omega0 = NA, minblen = NA, maxit = 20, abstol = .01, quiet = FALSE, searchRoot=3)
 }
 
 \arguments{
@@ -30,6 +30,19 @@ Minimum branch length in calendar time. By default, this will be the range of sa
   \item{maxit}{
 Maximum number of iterations.
 }
+
+\item{abstol}{
+	Difference in log likelihood between successive iterations for convergence. 
+}
+
+\item{searchRoot}{
+	Will search for the optimal root position using the top matches from root-to-tip regression. 
+	If searchRoot=x, dates will be estimated for x trees, and the estimate with the highest likelihood will be returned.
+}
+
+\item{quiet}{
+	If TRUE, will suppress messages during execution.
+}
 }
 
 \details{
@@ -48,6 +61,8 @@ A list with components
 \item{loglik }{The log likelihood of the Gamma-Poisson mixture model of the returned tree}
 \item{r }{Gamma shape parameter. If theta = 0, this is the mean rate.}
 \item{theta }{Gamma scale parameter}
+\item{timeToMRCA}{Estimated time before most recent sample of MRCA}
+\item{timeOfMRCA}{Estimated time of MRCA}
 }
 \references{
 Paper in preparation. Please cite github repository.
