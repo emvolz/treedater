@@ -7,4 +7,4 @@ Author: Erik M Volz
 Maintainer: Erik M Volz <erik.volz@gmail.com>
 Description:Fast molecular clock dating of phylogenetic trees with rate variation. 
 License: GPL
-Depends: ape
+Depends: ape,mgcv
