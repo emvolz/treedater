@@ -144,26 +144,20 @@ require(mgcv)
 	o
 }
 
-.optim.omegas.gammaPoisson0 <- function( Ti, r, gammatheta, td )
+
+.optim.omegas.gammaPoisson1 <- function( Ti, r, gammatheta, td )
 {
 	blen <- .Ti2blen( Ti, td )
-	
-	omegas <- rep(NA, length(blen))
-	
-	for (k in 1:nrow(td$tre$edge) ){
-		#lb <- 1e-3  
+	o <- sapply( 1:nrow(td$tre$edge), function(k){
+		sb <- (td$tre$edge.length[k]*td$s)
 		lb <- qgamma(1e-5,  shape=r, scale = gammatheta*blen[k] )
-		ub <- qgamma(1-1e-5,  shape=r, scale = gammatheta*blen[k] )
-		of <- function(lam_k){
-			-dpois( max(0, round(td$tre$edge.length[k]*td$s)),lam_k, log=T )  - 
-			 dgamma(lam_k, shape=r, scale = gammatheta*blen[k], log = T)
-		}
-		lam_k <- optimise( of, lower = lb, upper = ub)$minimum
-		omegas[k] <- lam_k / blen[k] / td$s
-	}
-	omegas
+		lam_star <- max(lb, gammatheta * blen[k] * (sb + r - 1) / (gammatheta * blen[k] + 1)  )
+		ll <- 	dpois( max(0, round(sb)),lam_star, log=T )  + 
+		 dgamma(lam_star, shape=r, scale = gammatheta*blen[k], log = T)
+		c(lam_star / blen[k] / td$s, ll )
+	}) 
+	list( omegas = o[1,], ll = unname(sum( o[2,] )) )
 }
-
 
 .optim.omega.poisson0 <- function(Ti, omega0, td)
 {	
@@ -180,12 +174,8 @@ require(mgcv)
 
 .mean.rate <- function(Ti, r, gammatheta, omegas, td)
 {
-	if (gammatheta<=0){
-		# this is a poisson model
-		return(r)
-	}	
+	if (is.infinite(r)) return(gammatheta) # poisson model
 	blen <- .Ti2blen( Ti, td )
-	
 	sum( omegas * blen ) / sum(blen)
 }
 
@@ -215,9 +205,12 @@ treedater = dater <- function(tre, sts, s=1e3
  , strictClock = FALSE
 )
 { 
+	# defaults
 	THETA_LB <- 1e-3
+	CV_LB <- .07 # switch to poisson model below this value (coef of variation of gamma)
 	scale_var_by_rate <- TRUE
 	cc <- 10
+	
 	if (is.null(names(sts))){
 		names(sts) <- tre$tip.label
 	}
@@ -251,8 +244,8 @@ treedater = dater <- function(tre, sts, s=1e3
 	td$minblen <- minblen
 	
 	# initial gamma parms with small variance
-	r0 = r <- ifelse( strictClock, omega0 , omega0 * td$s / 1e-2)
-	gammatheta0 = gammatheta <- ifelse( strictClock, 0,  1e-2 )
+	r = r0 <- ifelse(strictClock, Inf, sqrt(10))  #sqrt(r) = 10 
+	gammatheta = gammatheta0 <- ifelse(strictClock, omega0, omega0 * td$s / r0)
 	
 	done <- FALSE
 	lastll <- -Inf
@@ -267,24 +260,26 @@ treedater = dater <- function(tre, sts, s=1e3
 			Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
 		}
 		
-		if (gammatheta < THETA_LB){
+		#if (gammatheta < THETA_LB){
+		if ( (1 / sqrt(r)) < CV_LB){
 			# switch to poisson model
-			# r is now rate parm
 			o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
-			gammatheta <- 0
-			r <- unname(o$omega)
+			gammatheta <- unname(o$omega)
+			if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
+			r <- Inf#unname(o$omega)
 			ll <- o$ll
-			omegas <- rep( r, length(omegas))
+			omegas <- rep( gammatheta, length(omegas))
 		} else{
 			o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td)
 			r <- o$r
 			ll <- o$ll
 			gammatheta <- o$gammatheta
-			omegas <- .optim.omegas.gammaPoisson0( Ti, o$r, o$gammatheta, td ) 
+			oo <- .optim.omegas.gammaPoisson1( Ti, o$r, o$gammatheta, td ) 
+			omegas <- oo$omegas
+			ll <- ll + oo$ll
 		}
 		
-		ti_ll <- .Ti.ll1( omegas, Ti, td ) #
-		ll <- ll + ti_ll
+		ll <- ll + .Ti.ll1( omegas, Ti, td ) #
 		
 		if (!quiet)
 		{
@@ -313,7 +308,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	rv <- .trace[[i]]
 	td$minblen <- -Inf; blen <- .Ti2blen( rv$Ti, td )
 	tre$edge.length <- blen 
-	#rv$trace <- .trace
+#~ rv$trace <- .trace
 	rv$tre <- tre
 	rv$timeOfMRCA <- min(rv$Ti)
 	rv$timeToMRCA <- max(sts) - rv$timeOfMRCA
