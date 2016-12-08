@@ -10,6 +10,7 @@
 require(ape)
 require(mgcv)
 
+
 .make.tree.data <- function( tre, sampleTimes, s, cc)
 {
 	n <- length( tre$tip.label)
@@ -156,7 +157,7 @@ require(mgcv)
 		 dgamma(lam_star, shape=r, scale = gammatheta*blen[k], log = T)
 		c(lam_star / blen[k] / td$s, ll )
 	}) 
-	list( omegas = o[1,], ll = unname(sum( o[2,] )) )
+	list( omegas = o[1,], ll = unname(sum( o[2,] )), lls  = unname(o[2,])  )
 }
 
 .optim.omega.poisson0 <- function(Ti, omega0, td)
@@ -252,6 +253,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	iter <- 0
 	nEdges <- nrow(tre$edge)
 	omegas <- rep( omega0,  nEdges )
+	edge_lls <- NA
 	.trace <- list()
 	while(!done){
 		if (temporalConstraints){
@@ -268,6 +270,7 @@ treedater = dater <- function(tre, sts, s=1e3
 			if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
 			r <- Inf#unname(o$omega)
 			ll <- o$ll
+			edge_lls <- NA
 			omegas <- rep( gammatheta, length(omegas))
 		} else{
 			o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td)
@@ -275,6 +278,7 @@ treedater = dater <- function(tre, sts, s=1e3
 			ll <- o$ll
 			gammatheta <- o$gammatheta
 			oo <- .optim.omegas.gammaPoisson1( Ti, o$r, o$gammatheta, td ) 
+			edge_lls <- oo$lls
 			omegas <- oo$omegas
 			ll <- ll + oo$ll
 		}
@@ -291,9 +295,10 @@ treedater = dater <- function(tre, sts, s=1e3
 			print( gammatheta)
 			print( ll)
 		}
-		.trace[[length(.trace)+1]] <- list( omegas = omegas, r = r, theta = gammatheta, Ti = Ti
+		.trace[[length(.trace)+1]] <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
 		 , meanRate = .mean.rate(Ti, r, gammatheta, omegas, td)
-		 , loglik = ll )
+		 , loglik = ll
+		 , edge_lls = edge_lls )
 		
 		# check convergence
 		iter <- iter + 1
@@ -312,5 +317,8 @@ treedater = dater <- function(tre, sts, s=1e3
 	rv$tre <- tre
 	rv$timeOfMRCA <- min(rv$Ti)
 	rv$timeToMRCA <- max(sts) - rv$timeOfMRCA
+	rv$s <- s
+	rv$sts <- sts
+	rv$minblen <- minblen
 	rv
 }
