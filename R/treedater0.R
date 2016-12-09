@@ -77,7 +77,7 @@ require(mgcv)
 		r <- max(1e-3, exp( x['lnr'] ) )
 		gammatheta <- exp( x['lngammatheta'] )
 		if (is.infinite(r) | is.infinite(gammatheta)) return(Inf)
-		ps <- pmin(.999, gammatheta*blen / ( 1+ gammatheta * blen ) )
+		ps <- pmin(1 - 1e-5, gammatheta*blen / ( 1+ gammatheta * blen ) )
 		ov <- -sum( dnbinom( pmax(0, round(td$tre$edge.length*td$s))
 		  , size= r, prob=1-ps,  log = T) )
 		ov 
@@ -311,14 +311,48 @@ treedater = dater <- function(tre, sts, s=1e3
 	}
 	i <- which.max( sapply( .trace, function(x) x$loglik) )
 	rv <- .trace[[i]]
+	.tre <- tre
 	td$minblen <- -Inf; blen <- .Ti2blen( rv$Ti, td )
 	tre$edge.length <- blen 
 #~ rv$trace <- .trace
+	
 	rv$tre <- tre
+	rv$edge <- tre$edge
+	rv$edge.length <- tre$edge.length
+	rv$tip.label <- tre$tip.label
+	rv$Nnode <- tre$Nnode
+	
 	rv$timeOfMRCA <- min(rv$Ti)
 	rv$timeToMRCA <- max(sts) - rv$timeOfMRCA
 	rv$s <- s
 	rv$sts <- sts
 	rv$minblen <- minblen
+	rv$intree <- .tre 
+	rv$coef_of_variation <- 1 / sqrt(r)
+	rv$clock <- ifelse( is.infinite(r), 'strict', 'relaxed')
+	class(rv) <- c('treedater', 'phylo')
 	rv
+}
+
+print.treedater <- function(x, ...){
+    cl <- oldClass(x)
+    oldClass(x) <- cl[cl != "treedater"]
+    print(x$tre)
+    cat('\n Time of common ancestor \n' )
+    print( x$timeOfMRCA)
+    cat('\n Time to common ancestor (before most recent sample) \n' )
+    print( x$timeToMRCA)
+    cat( '\n Mean substitution rate \n')
+    print( x$meanRate )
+    cat( '\n Strict or relaxed clock \n')
+    print( x$clock )
+    cat( '\n Coefficient of variation of rates \n')
+    print( x$coef_of_variation )
+    
+    invisible(x)
+}
+
+summary.treedater <- function(x) {
+    stopifnot(inherits(x, "treedater"))
+    print.treedater( x )
 }
