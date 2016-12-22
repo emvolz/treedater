@@ -46,6 +46,7 @@ require(mgcv)
 	Ain[ cbind(internalEdges, tre$edge[internalEdges,2] - n) ] <- -1 # dgtr to +1
 	bin <- rep(0, length(B))
 	bin[tipEdges] <- sts # terminal edges to -sample time #...
+		
 	
 	W <- abs( 1/((tre$edge.length + cc / s)/s) ) 
 	list( A0 = A, B0 = B, W0 = W, n = n,  tipEdges=tipEdges
@@ -172,6 +173,31 @@ require(mgcv)
 	list( omega = unname( o$minimum), ll = -unname(o$objective) )
 }
 
+.optim.sampleTimes0 <- function( Ti, omegas, estimateSampleTimes, estimateSampleTimes_densities, td, iedge_tiplabel_est_samp_times )
+{
+	blen <- .Ti2blen( Ti, td )
+	o <- sapply( iedge_tiplabel_est_samp_times, function(k) {
+		u <- td$tre$edge[k,1]
+		v <- td$tre$edge[k,2]
+		V <- td$tre$tip.label[v]
+		dst <- estimateSampleTimes_densities[[V]]
+		tu <- Ti[u-td$n]
+		of <- function(tv){
+			.blen <- tv - tu 
+			-dst(tv, V) -
+			  dpois( max(0, round(td$tre$edge.length[k]*td$s))
+			  , td$s * .blen * omegas[k] 
+			  , log = T)
+		}
+		lb <- max( tu, estimateSampleTimes[V,'lower'] )
+		ub <- max( tu, estimateSampleTimes[V, 'upper'] )
+		if (ub == tu & lb == tu) return(tu + td$minblen)
+		o  <- optimise(  of, lower = lb, upper = ub )
+		o$minimum
+	})
+	o
+}
+
 
 .mean.rate <- function(Ti, r, gammatheta, omegas, td)
 {
@@ -204,13 +230,34 @@ treedater = dater <- function(tre, sts, s=1e3
  , quiet = FALSE
  , temporalConstraints = TRUE
  , strictClock = FALSE
+ , estimateSampleTimes = NULL
+ , estimateSampleTimes_densities= list()
 )
 { 
 	# defaults
-	THETA_LB <- 1e-3
 	CV_LB <- .07 # switch to poisson model below this value (coef of variation of gamma)
 	scale_var_by_rate <- TRUE
 	cc <- 10
+	
+	EST_SAMP_TIMES <- TRUE
+	EST_SAMP_TIMES_ERR <- 'estimateSampleTimes must specify a data frame with tip.label as row names and with columns `upper` and `lower`. You may also provide a named list of log density functions (improper priors for sample times).\n'
+	if (is.null(estimateSampleTimes)) EST_SAMP_TIMES <- FALSE
+	if (EST_SAMP_TIMES){
+		if (class(estimateSampleTimes)=='data.frame'){
+			if ( !('lower' %in% colnames(estimateSampleTimes)) | !('upper' %in% colnames(estimateSampleTimes) ) ){
+				stop(EST_SAMP_TIMES_ERR)
+			}
+			for (tl in rownames(estimateSampleTimes)){
+				if (!(tl %in% names( estimateSampleTimes_densities))){
+					estimateSampleTimes_densities[[tl]] <-  function(x,tl) dunif(x, min= estimateSampleTimes[tl,'lower'], max=estimateSampleTimes[tl,'upper'] , log = TRUE) #TODO maybe deprecate
+				}
+			}
+		} else {
+			stop(EST_SAMP_TIMES_ERR)
+		}
+		tiplabel_est_samp_times <- intersect( rownames(estimateSampleTimes), tre$tip.label)
+		iedge_tiplabel_est_samp_times <- match( tiplabel_est_samp_times, tre$tip.label[tre$edge[,2]] )
+	}
 	
 	if (is.null(names(sts))){
 		names(sts) <- tre$tip.label
@@ -254,7 +301,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	nEdges <- nrow(tre$edge)
 	omegas <- rep( omega0,  nEdges )
 	edge_lls <- NA
-	.trace <- list()
+	rv <- list()
 	while(!done){
 		if (temporalConstraints){
 			Ti <- .optim.Ti2( omegas, td)
@@ -262,7 +309,6 @@ treedater = dater <- function(tre, sts, s=1e3
 			Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
 		}
 		
-		#if (gammatheta < THETA_LB){
 		if ( (1 / sqrt(r)) < CV_LB){
 			# switch to poisson model
 			o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
@@ -280,10 +326,14 @@ treedater = dater <- function(tre, sts, s=1e3
 			oo <- .optim.omegas.gammaPoisson1( Ti, o$r, o$gammatheta, td ) 
 			edge_lls <- oo$lls
 			omegas <- oo$omegas
-			ll <- ll + oo$ll
 		}
 		
-		ll <- ll + .Ti.ll1( omegas, Ti, td ) #
+		if (EST_SAMP_TIMES){
+			o_sts <- .optim.sampleTimes0( Ti, omegas, estimateSampleTimes,estimateSampleTimes_densities, td, iedge_tiplabel_est_samp_times )
+			sts[tiplabel_est_samp_times] <- o_sts
+			td$sts[tiplabel_est_samp_times] <- o_sts
+			td$sts2[tiplabel_est_samp_times] <- o_sts
+		}
 		
 		if (!quiet)
 		{
@@ -295,10 +345,12 @@ treedater = dater <- function(tre, sts, s=1e3
 			print( gammatheta)
 			print( ll)
 		}
-		.trace[[length(.trace)+1]] <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
-		 , meanRate = .mean.rate(Ti, r, gammatheta, omegas, td)
-		 , loglik = ll
-		 , edge_lls = edge_lls )
+		if ( ll > lastll ){
+			rv <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
+			 , meanRate = .mean.rate(Ti, r, gammatheta, omegas, td)
+			 , loglik = ll
+			 , edge_lls = edge_lls )
+		}
 		
 		# check convergence
 		iter <- iter + 1
@@ -309,12 +361,9 @@ treedater = dater <- function(tre, sts, s=1e3
 		
 		lastll <- ll
 	}
-	i <- which.max( sapply( .trace, function(x) x$loglik) )
-	rv <- .trace[[i]]
 	.tre <- tre
 	td$minblen <- -Inf; blen <- .Ti2blen( rv$Ti, td )
 	tre$edge.length <- blen 
-#~ rv$trace <- .trace
 	
 	rv$tre <- tre
 	rv$edge <- tre$edge
