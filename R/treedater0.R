@@ -48,7 +48,9 @@ require(mgcv)
 	bin[tipEdges] <- sts # terminal edges to -sample time #...
 		
 	
-	W <- abs( 1/((tre$edge.length + cc / s)/s) ) 
+	#~ 	W <- abs( 1/( (tre$edge.length + cc / s)/s) ) 
+	W <- abs( 1/( pmax(.01,tre$edge.length) )/s)
+	
 	list( A0 = A, B0 = B, W0 = W, n = n,  tipEdges=tipEdges
 	 , i_tip_edge2label = i_tip_edge2label
 	 , sts2 = sts 
@@ -95,11 +97,18 @@ require(mgcv)
 		A <- omegas * td$A0 
 		B <- td$B0
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
+		#solve( t(A) %*% A ) %*% t(A) %*% B
 		if (scale_var_by_rate){
-			return( coef( lm ( B ~ A -1 , weights = td$W/omegas) ) )
+			rv <- ( coef( lm ( B ~ A -1 , weights = td$W/omegas) ) )
 		} else{
-			return( coef( lm ( B ~ A -1 , weights = td$W) ) ) 
+			rv <- ( coef( lm ( B ~ A -1 , weights = td$W) ) ) 
 		}
+	if (any(is.na(rv))){
+		warning('Numerical error when performing least squares optimisation. Values may be approximate.')
+		rv[is.na(rv)] <- max(rv, na.rm=T)
+		rv <- .hack.times1(rv, td )
+	}
+	rv
 }
 
 # TODO could also try  package limSolve to add constraints T_i > 0	
@@ -109,7 +118,7 @@ require(mgcv)
 		B <- td$B0 
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
 		B <- B * td$s
-		return( coef( lm ( B ~ A -1 , weights = 1 / (td$s*blen*omegas) ) ) )
+		return( coef( lm ( B ~ A -1 , weights = 1 / (td$s*blen*omegas) ) ) ) # note blen in units of time
 }
 .Ti.ll1 <-  function( omegas, Ti, td ){
 	blen <- .Ti2blen( Ti, td )
@@ -126,7 +135,12 @@ require(mgcv)
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
 		
 		# initial feasible parameter values:
-		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W/omegas) ) )
+		#p0 <- ( coef( lm ( B ~ A -1 , weights = td$W/omegas) ) )
+		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
+		if (any(is.na(p0))){
+			warning('Numerical error when performing least squares optimisation. Values may be approximate.')
+			p0[is.na(p0)] <- max(p0, na.rm=T)
+		}
 		p1 <- .hack.times1(p0, td )
 		
 		# design
@@ -140,7 +154,7 @@ require(mgcv)
 			,C=matrix(0,0,0)
 			,sp= c()#rep(0,np)
 			,y=B
-			,w=td$W/omegas
+			,w=td$W #/omegas
 		)
 		o <- pcls(M)
 	o
@@ -227,7 +241,7 @@ treedater = dater <- function(tre, sts, s=1e3
  , maxit=100
  , abstol = .01
  , searchRoot = 5
- , quiet = FALSE
+ , quiet = TRUE
  , temporalConstraints = TRUE
  , strictClock = FALSE
  , estimateSampleTimes = NULL
@@ -236,7 +250,7 @@ treedater = dater <- function(tre, sts, s=1e3
 { 
 	# defaults
 	CV_LB <- .07 # switch to poisson model below this value (coef of variation of gamma)
-	scale_var_by_rate <- TRUE
+	scale_var_by_rate <- FALSE #TRUE
 	cc <- 10
 	
 	EST_SAMP_TIMES <- TRUE
@@ -267,8 +281,12 @@ treedater = dater <- function(tre, sts, s=1e3
 		if (!quiet) cat( 'Tree is not rooted. Searching for best root position. Increase searchRoot to try harder.\n')
 		searchRoot <- round(searchRoot )
 		rtres <- .multi.rtt(tre, sts, topx=searchRoot)
-		tds <- lapply( rtres, function(t) dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-		 , strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet) )
+		tds <- lapply( rtres, function(t) {
+			tryCatch( {
+				dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
+				, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet) 
+			}, error = function(e) list( loglik = -Inf))
+		})
 		lls <- sapply( tds, function(td) td$loglik )
 		return ( tds [[ which.max( lls ) ]] )
 	} else{
@@ -316,7 +334,7 @@ treedater = dater <- function(tre, sts, s=1e3
 			if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
 			r <- Inf#unname(o$omega)
 			ll <- o$ll
-			edge_lls <- NA
+			edge_lls <- 0
 			omegas <- rep( gammatheta, length(omegas))
 		} else{
 			o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td)
@@ -388,15 +406,15 @@ print.treedater <- function(x, ...){
     oldClass(x) <- cl[cl != "treedater"]
     print(x$tre)
     cat('\n Time of common ancestor \n' )
-    print( x$timeOfMRCA)
+    cat(paste( x$timeOfMRCA, '\n') )
     cat('\n Time to common ancestor (before most recent sample) \n' )
-    print( x$timeToMRCA)
+    cat(paste( x$timeToMRCA, '\n') )
     cat( '\n Mean substitution rate \n')
-    print( x$meanRate )
+    cat(paste( x$meanRate , '\n'))
     cat( '\n Strict or relaxed clock \n')
-    print( x$clock )
+    cat(paste( x$clock , '\n'))
     cat( '\n Coefficient of variation of rates \n')
-    print( x$coef_of_variation )
+    cat(paste( x$coef_of_variation, '\n' ))
     
     invisible(x)
 }
