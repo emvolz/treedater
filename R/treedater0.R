@@ -46,12 +46,11 @@ require(mgcv)
 	Ain[ cbind(internalEdges, tre$edge[internalEdges,2] - n) ] <- -1 # dgtr to +1
 	bin <- rep(0, length(B))
 	bin[tipEdges] <- sts # terminal edges to -sample time #...
-		
 	
 	#~ 	W <- abs( 1/( (tre$edge.length + cc / s)/s) ) 
-	W <- abs( 1/( pmax(.01,tre$edge.length) )/s)
+	W <- abs( 1/( pmax(.001,tre$edge.length) )/s)
 	
-	list( A0 = A, B0 = B, W0 = W, n = n,  tipEdges=tipEdges
+	list( A0 = A, B0 = B, W0 = W, n = n, tipEdges=tipEdges
 	 , i_tip_edge2label = i_tip_edge2label
 	 , sts2 = sts 
 	 , s = s, cc = cc, tre = tre
@@ -239,7 +238,7 @@ treedater = dater <- function(tre, sts, s=1e3
  , omega0 = NA
  , minblen = NA
  , maxit=100
- , abstol = .01
+ , abstol = .001
  , searchRoot = 5
  , quiet = TRUE
  , temporalConstraints = TRUE
@@ -294,7 +293,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	}
 	sts <- sts[tre$tip.label]
 	if (is.na(minblen)){
-		minblen <- (max(sts) - min(sts)) / length(sts) #TODO choice of this parm is difficult, may require sep optim / crossval
+		minblen <- (max(sts) - min(sts)) / length(sts)/100 #TODO choice of this parm is difficult, may require sep optim / crossval
 	}
 	if (is.na(omega0)){
 		# guess
@@ -346,7 +345,8 @@ treedater = dater <- function(tre, sts, s=1e3
 			omegas <- oo$omegas
 		}
 		
-		if (EST_SAMP_TIMES){
+		if (EST_SAMP_TIMES)
+		{
 			o_sts <- .optim.sampleTimes0( Ti, omegas, estimateSampleTimes,estimateSampleTimes_densities, td, iedge_tiplabel_est_samp_times )
 			sts[tiplabel_est_samp_times] <- o_sts
 			td$sts[tiplabel_est_samp_times] <- o_sts
