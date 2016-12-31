@@ -1,4 +1,5 @@
 \name{parboot.treedater}
+\alias{parboot.treedater}
 \title{Estimate of confidence intervals using parametric bootstrap for molecular clock dating. }
 \description{
 	This function simulates phylogenies with branch lengths in units of substitutions per site. Simulations are based on a fitted treedater object which provides parameters of the molecular clock model. The treedater method is applied to each simulated tree providing a Monte Carlo estimate of variance in rates and dates.
