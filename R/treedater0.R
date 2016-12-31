@@ -276,9 +276,12 @@ treedater = dater <- function(tre, sts, s=1e3
 		names(sts) <- tre$tip.label
 	}
 	sts <- sts[tre$tip.label]
+	
+	intree_rooted <- TRUE
 	if (!is.rooted(tre)){
+		intree_rooted <- FALSE
 		if (!quiet) cat( 'Tree is not rooted. Searching for best root position. Increase searchRoot to try harder.\n')
-		searchRoot <- round(searchRoot )
+		searchRoot <- round( searchRoot )
 		rtres <- .multi.rtt(tre, sts, topx=searchRoot)
 		tds <- lapply( rtres, function(t) {
 			tryCatch( {
@@ -397,6 +400,12 @@ treedater = dater <- function(tre, sts, s=1e3
 	rv$intree <- .tre 
 	rv$coef_of_variation <- 1 / sqrt(r)
 	rv$clock <- ifelse( is.infinite(r), 'strict', 'relaxed')
+	rv$intree_rooted <- intree_rooted
+	rv$temporalConstraints <- temporalConstraints
+	rv$estimateSampleTimes <- estimateSampleTimes
+	rv$EST_SAMP_TIMES = EST_SAMP_TIMES
+	if (!EST_SAMP_TIMES) rv$estimateSampleTimes <- NULL
+	rv$estimateSampleTimes_densities <- estimateSampleTimes_densities
 	class(rv) <- c('treedater', 'phylo')
 	rv
 }
