@@ -52,7 +52,9 @@ require(mgcv)
 	
 	list( A0 = A, B0 = B, W0 = W, n = n, tipEdges=tipEdges
 	 , i_tip_edge2label = i_tip_edge2label
-	 , sts2 = sts 
+	 , sts2 = sts  # in order of tipEdges
+	 , sts1 = sampleTimes[ tre$tip.label] # in order of tip.label
+	 , sts = sampleTimes
 	 , s = s, cc = cc, tre = tre
 	 , daughters = daughters
 	 , parent = parent
@@ -221,7 +223,8 @@ require(mgcv)
 
 .hack.times1 <- function(Ti, td)
 {
-	t <- c( td$sts2[td$tre$tip.label], Ti)
+#~ 	t <- c( td$sts2[td$tre$tip.label], Ti)
+	t <- c( td$sts1[td$tre$tip.label], Ti)
 	inodes <- (td$n+1):length(t)
 	
 	repeat
@@ -255,11 +258,16 @@ treedater = dater <- function(tre, sts, s=1e3
 	EST_SAMP_TIMES <- TRUE
 	EST_SAMP_TIMES_ERR <- 'estimateSampleTimes must specify a data frame with tip.label as row names and with columns `upper` and `lower`. You may also provide a named list of log density functions (improper priors for sample times).\n'
 	if (is.null(estimateSampleTimes)) EST_SAMP_TIMES <- FALSE
+	.estimateSampleTimes_densities <- estimateSampleTimes_densities
 	if (EST_SAMP_TIMES){
 		if (class(estimateSampleTimes)=='data.frame'){
 			if ( !('lower' %in% colnames(estimateSampleTimes)) | !('upper' %in% colnames(estimateSampleTimes) ) ){
 				stop(EST_SAMP_TIMES_ERR)
 			}
+			if ( any (estimateSampleTimes$lower > estimateSampleTimes$upper) ){
+				stop(EST_SAMP_TIMES_ERR )
+			}
+			estimateSampleTimes <- estimateSampleTimes[ estimateSampleTimes$lower < estimateSampleTimes$upper ,]
 			for (tl in rownames(estimateSampleTimes)){
 				if (!(tl %in% names( estimateSampleTimes_densities))){
 					estimateSampleTimes_densities[[tl]] <-  function(x,tl) dunif(x, min= estimateSampleTimes[tl,'lower'], max=estimateSampleTimes[tl,'upper'] , log = TRUE) #TODO maybe deprecate
@@ -284,10 +292,12 @@ treedater = dater <- function(tre, sts, s=1e3
 		searchRoot <- round( searchRoot )
 		rtres <- .multi.rtt(tre, sts, topx=searchRoot)
 		tds <- lapply( rtres, function(t) {
-			tryCatch( {
+			#tryCatch( {
 				dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-				, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet) 
-			}, error = function(e) list( loglik = -Inf))
+				, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+				, estimateSampleTimes = estimateSampleTimes
+				, estimateSampleTimes_densities = .estimateSampleTimes_densities  ) 
+			#}, error = function(e) list( loglik = -Inf)) # 
 		})
 		lls <- sapply( tds, function(td) td$loglik )
 		return ( tds [[ which.max( lls ) ]] )
