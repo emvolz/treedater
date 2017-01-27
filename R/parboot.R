@@ -1,6 +1,7 @@
 
-parboot.treedater <- function( td , nreps = 100, level = .95, overrideTempConstraint=T )
+parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T )
 {
+	level <- .95
 	alpha <- min(1, max(0, 1 - level ))
 	lapply( 1:nreps, function(k) 
 	{
@@ -23,13 +24,14 @@ parboot.treedater <- function( td , nreps = 100, level = .95, overrideTempConstr
 		tempConstraint <- td$temporalConstraints
 		if ( overrideTempConstraint) tempConstraint <- FALSE
 		td <- dater(tre, td$sts
-		 , omega0 = td$meanRate
+		 , omega0 = NA#td$meanRate
 		 , minblen = td$minblen
 		 , quiet = TRUE
 		 , temporalConstraints = tempConstraint
 		 , strictClock = ifelse( td$clock=='strict' , TRUE, FALSE )
 		 , estimateSampleTimes = est
 		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
+		 , numStartConditions = td$numStartConditions 
 		)
 		cat('\n #############################\n')
 		cat( paste( '\n Replicate', k, 'complete \n' ))

@@ -312,7 +312,9 @@ treedater = dater <- function(tre, sts, s=1e3
 				dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
 				, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
 				, estimateSampleTimes = estimateSampleTimes
-				, estimateSampleTimes_densities = .estimateSampleTimes_densities  ) 
+				, estimateSampleTimes_densities = .estimateSampleTimes_densities  
+				, numStartConditions = numStartConditions
+				) 
 			#}, error = function(e) list( loglik = -Inf)) # 
 		})
 		lls <- sapply( tds, function(td) td$loglik )
@@ -460,6 +462,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	rv$EST_SAMP_TIMES = EST_SAMP_TIMES
 	if (!EST_SAMP_TIMES) rv$estimateSampleTimes <- NULL
 	rv$estimateSampleTimes_densities <- estimateSampleTimes_densities
+	rv$numStartConditions = numStartConditions
 	class(rv) <- c('treedater', 'phylo')
 	rv
 }
