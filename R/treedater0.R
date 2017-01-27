@@ -155,7 +155,7 @@ require(mgcv)
 			,C=matrix(0,0,0)
 			,sp= c()#rep(0,np)
 			,y=B
-			,w=td$W #/omegas
+			,w=td$W #/omegas # better performance on lsd tests w/o this  
 		)
 		o <- pcls(M)
 	o
@@ -183,6 +183,19 @@ require(mgcv)
 	of <- function(omega)
 	{
 		-sum( dpois( pmax(0, round(td$tre$edge.length*td$s)), td$s * blen * omega ,  log = T) )
+	}
+	o <- optimise(  of, lower = omega0 / 10, upper = omega0 * 10)
+	list( omega = unname( o$minimum), ll = -unname(o$objective) )
+}
+
+.optim.omega.normal0 <- function(Ti, omega0, td)
+{	
+	blen <- .Ti2blen( Ti, td ) 
+	blen <- pmax( quantile( blen, .05 ), blen ) 
+	
+	of <- function(omega)
+	{
+		-sum( dnorm( td$s * td$tre$edge.length,  sd = sqrt( td$s * blen * omega ) ,  log = T) )
 	}
 	o <- optimise(  of, lower = omega0 / 10, upper = omega0 * 10)
 	list( omega = unname( o$minimum), ll = -unname(o$objective) )
@@ -241,19 +254,22 @@ treedater = dater <- function(tre, sts, s=1e3
  , omega0 = NA
  , minblen = NA
  , maxit=100
- , abstol = .001
+ , abstol = .0001
  , searchRoot = 5
  , quiet = TRUE
  , temporalConstraints = TRUE
  , strictClock = FALSE
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
+ , numStartConditions = 1
 )
 { 
 	# defaults
 	CV_LB <- .07 # switch to poisson model below this value (coef of variation of gamma)
-	scale_var_by_rate <- TRUE #FALSE #TRUE # TODO ??
-	cc <- 10
+	scale_var_by_rate <- FALSE # better performance on lsd tests without this 
+	cc <- 1
+	
+	numStartConditions <- max(0, round( numStartConditions )) # number of omega0 to try for optimisation
 	
 	EST_SAMP_TIMES <- TRUE
 	EST_SAMP_TIMES_ERR <- 'estimateSampleTimes must specify a data frame with tip.label as row names and with columns `upper` and `lower`. You may also provide a named list of log density functions (improper priors for sample times).\n'
@@ -305,92 +321,121 @@ treedater = dater <- function(tre, sts, s=1e3
 		if (!quiet) cat( 'Tree is rooted. Not estimating root position.\n')
 	}
 	if (is.na(minblen)){
-		minblen <- (max(sts) - min(sts)) / length(sts)/100 #TODO choice of this parm is difficult, may require sep optim / crossval
+		minblen <- diff(range(sts))/100/ length(sts) #TODO choice of this parm is difficult, may require sep optim / crossval
+	}
+	if (!is.na(omega0) & numStartConditions > 0 ){
+		warning('omega0 provided incompatible with numStartConditions > 0. Setting numStartConditions to zero.')
+		numStartConditions <- 0
 	}
 	if (is.na(omega0)){
 		# guess
-		omega0 <- estimate.mu( tre, sts )
+		#omega0 <- estimate.mu( tre, sts )
+		g0 <- lm(ape::node.depth.edgelength(tre)[1:length(sts)] ~ sts, na.action = na.omit)
+		omega0sd <- summary( g0 )$coef[2,2]
+		omega0 <- unname( coef(g0)[2] )
+		omega0s <- qnorm( unique(sort(c(.5, seq(.025, .975, l=numStartConditions*2) )))  , omega0, sd = omega0sd )
+		omega0s <- omega0s[ omega0s > 0 ]
 		if (!quiet){
-			cat('initial rate:\n')
-			print(omega0)
+			cat('initial rates:\n')
+			print(omega0s)
 		}
+	} else{
+		omega0s <- c( omega0 )
 	}
 	td <- .make.tree.data(tre, sts, s, cc )
 	td$minblen <- minblen
 	
-	# initial gamma parms with small variance
-	r = r0 <- ifelse(strictClock, Inf, sqrt(10))  #sqrt(r) = 10 
-	gammatheta = gammatheta0 <- ifelse(strictClock, omega0, omega0 * td$s / r0)
-	
-	done <- FALSE
-	lastll <- -Inf
-	iter <- 0
-	nEdges <- nrow(tre$edge)
-	omegas <- rep( omega0,  nEdges )
-	edge_lls <- NA
-	rv <- list()
-	while(!done){
-		if (temporalConstraints){
-			Ti <- .optim.Ti2( omegas, td)
-		} else{
-			Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
-		}
+	#lapply( omega0s , function(omega0){
+	omega2ll <- -Inf 
+	bestrv <- list()
+	for ( omega0 in omega0s ){
+		# initial gamma parms with small variance
+		r = r0 <- ifelse(strictClock, Inf, sqrt(10))  #sqrt(r) = 10 
+		gammatheta = gammatheta0 <- ifelse(strictClock, omega0, omega0 * td$s / r0)
 		
-		if ( (1 / sqrt(r)) < CV_LB){
-			# switch to poisson model
-			o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
-			gammatheta <- unname(o$omega)
-			if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
-			r <- Inf#unname(o$omega)
-			ll <- o$ll
-			edge_lls <- 0
-			omegas <- rep( gammatheta, length(omegas))
-		} else{
-			o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td)
-			r <- o$r
-			ll <- o$ll
-			gammatheta <- o$gammatheta
-			oo <- .optim.omegas.gammaPoisson1( Ti, o$r, o$gammatheta, td ) 
-			edge_lls <- oo$lls
-			omegas <- oo$omegas
+		done <- FALSE
+		lastll <- -Inf
+		iter <- 0
+		nEdges <- nrow(tre$edge)
+		omegas <- rep( omega0,  nEdges )
+		edge_lls <- NA
+		rv <- list()
+		while(!done){
+			if (temporalConstraints){
+				Ti <- .optim.Ti2( omegas, td)
+			} else{
+				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
+			}
+			
+			if ( (1 / sqrt(r)) < CV_LB){
+				# switch to poisson model
+				o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
+				#o <- .optim.omega.normal0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
+				gammatheta <- unname(o$omega)
+				if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
+				r <- Inf#unname(o$omega)
+				ll <- o$ll
+				edge_lls <- 0
+				omegas <- rep( gammatheta, length(omegas))
+			} else{
+				o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td)
+				r <- o$r
+				ll <- o$ll
+				gammatheta <- o$gammatheta
+				oo <- .optim.omegas.gammaPoisson1( Ti, o$r, o$gammatheta, td ) 
+				edge_lls <- oo$lls
+				omegas <- oo$omegas
+			}
+			
+			if (EST_SAMP_TIMES)
+			{
+				o_sts <- .optim.sampleTimes0( Ti, omegas, estimateSampleTimes,estimateSampleTimes_densities, td, iedge_tiplabel_est_samp_times )
+				sts[tiplabel_est_samp_times] <- o_sts
+				td$sts[tiplabel_est_samp_times] <- o_sts
+				td$sts2[tiplabel_est_samp_times] <- o_sts
+			}
+			
+			if (!quiet)
+			{
+				cat('iter, omegas, T, r, theta, logLik\n')
+				print(c( iter))
+				print(summary(omegas))
+				print(summary(Ti))
+				print( r)
+				print( gammatheta)
+				print( ll)
+			}
+			if ( ll >= lastll ){
+				rv <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
+				 , meanRate = .mean.rate(Ti, r, gammatheta, omegas, td)
+				 , loglik = ll
+				 , edge_lls = edge_lls )
+			}
+			
+			# check convergence
+			iter <- iter + 1
+			if (iter > maxit) done <- TRUE
+			
+			if ( abs( ll - lastll ) < abstol) done <- TRUE
+			if (ll < lastll) {
+				done <- TRUE
+			}
+			
+			lastll <- ll
 		}
-		
-		if (EST_SAMP_TIMES)
-		{
-			o_sts <- .optim.sampleTimes0( Ti, omegas, estimateSampleTimes,estimateSampleTimes_densities, td, iedge_tiplabel_est_samp_times )
-			sts[tiplabel_est_samp_times] <- o_sts
-			td$sts[tiplabel_est_samp_times] <- o_sts
-			td$sts2[tiplabel_est_samp_times] <- o_sts
+		if ( omega2ll < rv$loglik){
+			bestrv <- rv
+			omega2ll <- ll
 		}
-		
-		if (!quiet)
-		{
-			cat('iter, omegas, T, r, theta, logLik\n')
-			print(c( iter))
-			print(summary(omegas))
-			print(summary(Ti))
-			print( r)
-			print( gammatheta)
-			print( ll)
-		}
-		if ( ll >= lastll ){
-			rv <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
-			 , meanRate = .mean.rate(Ti, r, gammatheta, omegas, td)
-			 , loglik = ll
-			 , edge_lls = edge_lls )
-		}
-		
-		# check convergence
-		iter <- iter + 1
-		if (iter > maxit) done <- TRUE
-		
-		if ( abs( ll - lastll ) < abstol) done <- TRUE
-		if (ll < lastll) {
-			done <- TRUE
-		}
-		
-		lastll <- ll
+		#rv
 	}
+	#) -> rvs 
+	
+	#~ 	rvs_lls <- sapply( rvs, function(rv) rv$loglik )
+	#~ 	rv <- rvs[[which.max( rvs_lls )]]
+	
+	rv <- bestrv
+	
 	.tre <- tre
 	td$minblen <- -Inf; blen <- .Ti2blen( rv$Ti, td )
 	tre$edge.length <- blen 
@@ -407,8 +452,8 @@ treedater = dater <- function(tre, sts, s=1e3
 	rv$sts <- sts
 	rv$minblen <- minblen
 	rv$intree <- .tre 
-	rv$coef_of_variation <- 1 / sqrt(r)
-	rv$clock <- ifelse( is.infinite(r), 'strict', 'relaxed')
+	rv$coef_of_variation <- 1 / sqrt(rv$r)
+	rv$clock <- ifelse( is.infinite(rv$r), 'strict', 'relaxed')
 	rv$intree_rooted <- intree_rooted
 	rv$temporalConstraints <- temporalConstraints
 	rv$estimateSampleTimes <- estimateSampleTimes
