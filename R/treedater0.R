@@ -47,8 +47,8 @@ require(mgcv)
 	bin <- rep(0, length(B))
 	bin[tipEdges] <- sts # terminal edges to -sample time #...
 	
-	#~ 	W <- abs( 1/( (tre$edge.length + cc / s)/s) ) 
-	W <- abs( 1/( pmax(.001,tre$edge.length) )/s)
+	W <- abs( 1/( (tre$edge.length + cc / s)/s) ) 
+	#W <- abs( 1/( pmax(.001,tre$edge.length) )/s)
 	
 	list( A0 = A, B0 = B, W0 = W, n = n, tipEdges=tipEdges
 	 , i_tip_edge2label = i_tip_edge2label
@@ -252,7 +252,7 @@ treedater = dater <- function(tre, sts, s=1e3
 { 
 	# defaults
 	CV_LB <- .07 # switch to poisson model below this value (coef of variation of gamma)
-	scale_var_by_rate <- FALSE #TRUE
+	scale_var_by_rate <- TRUE #FALSE #TRUE # TODO ??
 	cc <- 10
 	
 	EST_SAMP_TIMES <- TRUE
@@ -304,15 +304,12 @@ treedater = dater <- function(tre, sts, s=1e3
 	} else{
 		if (!quiet) cat( 'Tree is rooted. Not estimating root position.\n')
 	}
-	sts <- sts[tre$tip.label]
 	if (is.na(minblen)){
 		minblen <- (max(sts) - min(sts)) / length(sts)/100 #TODO choice of this parm is difficult, may require sep optim / crossval
 	}
 	if (is.na(omega0)){
 		# guess
-		n <- length( tre$tip.label)
-		d2root <- setNames(  dist.nodes( tre )[(n+1),1:n], tre$tip.label)
-		omega0 <- coef( lm( d2root ~ sts) )[2]
+		omega0 <- estimate.mu( tre, sts )
 		if (!quiet){
 			cat('initial rate:\n')
 			print(omega0)
@@ -376,7 +373,7 @@ treedater = dater <- function(tre, sts, s=1e3
 			print( gammatheta)
 			print( ll)
 		}
-		if ( ll > lastll ){
+		if ( ll >= lastll ){
 			rv <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
 			 , meanRate = .mean.rate(Ti, r, gammatheta, omegas, td)
 			 , loglik = ll
@@ -388,7 +385,9 @@ treedater = dater <- function(tre, sts, s=1e3
 		if (iter > maxit) done <- TRUE
 		
 		if ( abs( ll - lastll ) < abstol) done <- TRUE
-		if (ll < lastll) done <- TRUE
+		if (ll < lastll) {
+			done <- TRUE
+		}
 		
 		lastll <- ll
 	}
