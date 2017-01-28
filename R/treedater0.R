@@ -265,7 +265,8 @@ treedater = dater <- function(tre, sts, s=1e3
 )
 { 
 	# defaults
-	CV_LB <- .07 # switch to poisson model below this value (coef of variation of gamma)
+	#CV_LB <- .07 # switch to poisson model below this value (coef of variation of gamma)
+	CV_LB <- 0 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	scale_var_by_rate <- FALSE # better performance on lsd tests without this 
 	cc <- 1
 	
