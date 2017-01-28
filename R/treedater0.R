@@ -266,7 +266,7 @@ treedater = dater <- function(tre, sts, s=1e3
 { 
 	# defaults
 	#CV_LB <- .07 # switch to poisson model below this value (coef of variation of gamma)
-	CV_LB <- 0 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
+	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	scale_var_by_rate <- FALSE # better performance on lsd tests without this 
 	cc <- 1
 	
@@ -369,7 +369,6 @@ treedater = dater <- function(tre, sts, s=1e3
 			} else{
 				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
 			}
-			
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
 				o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
@@ -455,7 +454,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	rv$sts <- sts
 	rv$minblen <- minblen
 	rv$intree <- .tre 
-	rv$coef_of_variation <- 1 / sqrt(rv$r)
+	rv$coef_of_variation <- ifelse( is.numeric(rv$r), 1 / sqrt(rv$r), NA )
 	rv$clock <- ifelse( is.infinite(rv$r), 'strict', 'relaxed')
 	rv$intree_rooted <- intree_rooted
 	rv$temporalConstraints <- temporalConstraints

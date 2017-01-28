@@ -23,7 +23,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T )
 		if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
 		tempConstraint <- td$temporalConstraints
 		if ( overrideTempConstraint) tempConstraint <- FALSE
-		td <- dater(tre, td$sts
+		td <- tryCatch({ dater(tre, td$sts
 		 , omega0 = NA#td$meanRate
 		 , minblen = td$minblen
 		 , quiet = TRUE
@@ -32,13 +32,14 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T )
 		 , estimateSampleTimes = est
 		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 		 , numStartConditions = td$numStartConditions 
-		)
+		)}, error = function(e) NA)
+		if (suppressWarnings( is.na( td[1])) ) return (NA )
 		cat('\n #############################\n')
 		cat( paste( '\n Replicate', k, 'complete \n' ))
 		print( td )
 		td
 	}) -> tds
-	
+	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	# output rate CIs, parameter CIs, trees
 	meanRates <- sapply( tds, function(td) td$meanRate )
 	cvs <- sapply( tds, function(td) td$coef_of_variation )
