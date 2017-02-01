@@ -81,3 +81,22 @@ o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$meanRate)
 	cat( '\n For more detailed output, $trees provides a list of each fit to each simulation \n')
 	invisible(x)
 }
+
+plot.parboot.ltt <- function(pbtd, t0 = NA, res = 100, ... )
+{
+	t1 <- max( pbtd$sts )
+	if (is.na(t0)) t0 <- min( sapply( pbtd$trees), function(tr) tr$timeOf )
+	times <- seq( t0, t1, l = res )
+	cbind( times = times , t( sapply( times, function(t){
+		c( pml = sum(pbtd$td$sts > t ) - sum( pbtd$td$Ti>t ) 
+			, setNames(quantile( sapply( pbtd$trees, function(tre ) sum( tre$sts > t) - sum( tre$Ti > t ) )
+			 , probs = c( .025, .5, .975 ) 
+			), c('lb', 'median', 'ub') )
+		)
+	}))) -> ltt
+
+	pl.df <- as.data.frame( ltt )
+	p <- ggplot( pl.df, ... ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
+	p <- p + geom_path( aes(x = times, y = pml ))
+	(p <- p + ylab( 'Lineages through time') + xlab('Time' )  )
+}
