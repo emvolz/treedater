@@ -44,19 +44,20 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T )
 	meanRates <- sapply( tds, function(td) td$meanRate )
 	cvs <- sapply( tds, function(td) td$coef_of_variation )
 	tmrcas <- sapply( tds, function(td) td$timeOfMRCA )
-	mr_sd <- sd(meanRates)
-	tmrca_sd <- sd( tmrcas )
+	ttmrcas <- sapply( tds, function(td) td$timeTo )
+	log_mr_sd <- sd(log(meanRates))
+	log_tmrca_sd <- sd( log(ttmrcas ) )
 	rv <- list( 
 		trees = tds
 		, meanRates = meanRates
-		, meanRate_CI = c( max(0, td$meanRate - mr_sd*1.96), td$meanRate + mr_sd*1.96 )
-		#, meanRate_CI = quantile( meanRates, probs = c(alpha/2, 1-alpha/2 ))
+		, meanRate_CI = c( exp( log(td$meanRate) - log_mr_sd*1.96), exp(log(td$meanRate) + log_mr_sd*1.96 ))
 		, coef_of_variation_CI = quantile( cvs, probs = c(alpha/2, 1 - alpha/2))
-		, timeOfMRCA_CI = c( td$timeOfMRCA - tmrca_sd*1.96, td$timeOfMRCA + tmrca_sd*1.96 )
-		#, timeOfMRCA_CI = quantile( tmrcas, probs = c(alpha/2, 1 - alpha/2))
+		, timeOfMRCA_CI = c( td$timeOfMRCA * exp(-log_tmrca_sd*1.96), td$timeOfMRCA * exp(log_tmrca_sd*1.96 ))
 		, td = td
 		, alpha = alpha
 		, level = level
+		, tmrcas = tmrcas
+		, ttmrcas = ttmrcas
 	)
 	class(rv) <- 'parboot.treedater'
 	rv
