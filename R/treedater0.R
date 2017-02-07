@@ -261,7 +261,7 @@ treedater = dater <- function(tre, sts, s=1e3
  , strictClock = FALSE
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
- , numStartConditions = 1
+ , numStartConditions = 0
 )
 { 
 	# defaults

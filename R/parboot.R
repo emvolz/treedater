@@ -1,5 +1,5 @@
 
-parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T )
+parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL )
 {
 	level <- .95
 	alpha <- min(1, max(0, 1 - level ))
@@ -23,12 +23,23 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T )
 		if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
 		tempConstraint <- td$temporalConstraints
 		if ( overrideTempConstraint) tempConstraint <- FALSE
+				
+		clockstr <- td$clock
+		if (!is.null( overrideClock)){
+			if (is.na(overrideClock)) stop('overrideClock NA. Quitting.')
+			if (!overrideClock %in% c('strict', 'relaxed') ){
+				stop('overrideClock must be one of strict or relaxed')
+			}
+			clockstr <- overrideClock
+		}
+		strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
+		
 		td <- tryCatch({ dater(tre, td$sts
 		 , omega0 = NA#td$meanRate
 		 , minblen = td$minblen
 		 , quiet = TRUE
 		 , temporalConstraints = tempConstraint
-		 , strictClock = ifelse( td$clock=='strict' , TRUE, FALSE )
+		 , strictClock = strictClock
 		 , estimateSampleTimes = est
 		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 		 , numStartConditions = td$numStartConditions 
@@ -99,5 +110,28 @@ plot.parboot.ltt <- function(pbtd, t0 = NA, res = 100, ... )
 	pl.df <- as.data.frame( ltt )
 	p <- ggplot( pl.df, ... ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
 	p <- p + geom_path( aes(x = times, y = pml ))
-	(p <- p + ylab( 'Lineages through time') + xlab('Time' )  )
+	(p <- p + ylab( 'Lineages through time') + xlab('Time')  )
+}
+
+
+
+relaxed.clock.test <- function( ..., nreps=100, overrideTempConstraint=T )
+{
+	argnames <- names(list(...))
+	if ( 'strictClock'  %in% argnames) stop('Can not prespecify clock type *strictClock* for relaxed.clock.test. Quitting.')
+	td <- dater(..., strict=TRUE)
+	pbtd <-  parboot.treedater( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
+	 , overrideClock = 'relaxed' )
+	cvci_null <- pbtd$coef_of_variation_CI
+	
+	tdrc <- dater(..., strict=FALSE)
+	clock <- 'strict'
+	if ( tdrc$coef_of_variation > cvci_null[2] ){
+		clock <- 'relaxed'
+	}
+	cat( paste( 'Best clock model: ', clock, '\n'))
+	cat( paste( 'Null distribution of rate coefficient of variation:', paste(cvci_null, collapse=' '), '\n'))
+	cat('Returning best treedater fit\n')
+	if (clock=='strict') return( td )
+	tdrc
 }
