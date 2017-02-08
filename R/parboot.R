@@ -1,6 +1,9 @@
 
-parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL )
+parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, quiet=TRUE )
 {
+	if (quiet){
+	cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
+	}
 	level <- .95
 	alpha <- min(1, max(0, 1 - level ))
 	lapply( 1:nreps, function(k) 
@@ -45,9 +48,12 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 		 , numStartConditions = td$numStartConditions 
 		)}, error = function(e) NA)
 		if (suppressWarnings( is.na( td[1])) ) return (NA )
-		cat('\n #############################\n')
-		cat( paste( '\n Replicate', k, 'complete \n' ))
-		print( td )
+		
+		if (!quiet){
+			cat('\n #############################\n')
+			cat( paste( '\n Replicate', k, 'complete \n' ))
+			print( td )
+		}
 		td
 	}) -> tds
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
@@ -132,6 +138,10 @@ relaxed.clock.test <- function( ..., nreps=100, overrideTempConstraint=T )
 	cat( paste( 'Best clock model: ', clock, '\n'))
 	cat( paste( 'Null distribution of rate coefficient of variation:', paste(cvci_null, collapse=' '), '\n'))
 	cat('Returning best treedater fit\n')
-	if (clock=='strict') return( td )
-	tdrc
+	list( strict_treedater = td
+	 , relaxed_treedater = tdrc 
+	 , clock = clock
+	 , parboot_strict = pbtd
+	 , nullHypothesis_coef_of_variation_CI = cvci_null
+	)
 }

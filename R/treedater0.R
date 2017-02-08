@@ -463,6 +463,23 @@ treedater = dater <- function(tre, sts, s=1e3
 	if (!EST_SAMP_TIMES) rv$estimateSampleTimes <- NULL
 	rv$estimateSampleTimes_densities <- estimateSampleTimes_densities
 	rv$numStartConditions = numStartConditions
+	
+	# add pvals for each edge
+	if (rv$clock=='relaxed'){
+		rv$edge.p <- with(rv, {
+		blen <- pmax(minblen, tre$edge.length)
+		ps <- pmin(1 - 1e-05, theta * blen/(1 + theta * blen))
+			pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
+				prob = 1 - ps)
+		})
+	} else{
+		rv$edge.p <- with(rv, {
+			blen <- pmax(minblen, tre$edge.length)
+			ppois(pmax(0, round(intree$edge.length * s)), blen * 
+				meanRate * s)
+		})
+	}
+	
 	class(rv) <- c('treedater', 'phylo')
 	rv
 }
@@ -488,4 +505,11 @@ print.treedater <- function(x, ...){
 summary.treedater <- function(x) {
     stopifnot(inherits(x, "treedater"))
     print.treedater( x )
+}
+
+
+treedater.goodness.of.fit.plot <- function(td)
+{
+	plot( 1:length(p)/length(p), sort (p ) , type = 'l', xlab='Theoretical quantiles', ylab='Edge p value'); 
+	abline( a = 0, b = 1 )
 }
