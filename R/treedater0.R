@@ -308,11 +308,10 @@ treedater = dater <- function(tre, sts, s=1e3
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
  , numStartConditions = 0
- , ls_adjustRates = TRUE #TODO 
 )
 { 
 	# defaults
-	#CV_LB <- .07 # switch to poisson model below this value (coef of variation of gamma)
+	ls_adjustRates <- TRUE
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	scale_var_by_rate <- FALSE # better performance on lsd tests without this 
 	cc <- 1
@@ -362,7 +361,6 @@ treedater = dater <- function(tre, sts, s=1e3
 				, estimateSampleTimes = estimateSampleTimes
 				, estimateSampleTimes_densities = .estimateSampleTimes_densities  
 				, numStartConditions = numStartConditions
-				, ls_adjustRates = ls_adjustRates #TODO
 				) 
 			#}, error = function(e) list( loglik = -Inf)) # 
 		})
@@ -396,7 +394,6 @@ treedater = dater <- function(tre, sts, s=1e3
 	td <- .make.tree.data(tre, sts, s, cc )
 	td$minblen <- minblen
 	
-	#lapply( omega0s , function(omega0){
 	omega2ll <- -Inf 
 	bestrv <- list()
 	for ( omega0 in omega0s ){
@@ -415,7 +412,7 @@ treedater = dater <- function(tre, sts, s=1e3
 		while(!done){
 			if (temporalConstraints){
 				if ( ls_adjustRates ){
-					Ti <- .optim.Ti2( omegas, td) #TODO
+					Ti <- .optim.Ti2( omegas, td) 
 				} else{
 					Ti <- .optim.Ti3.constrained( omega, td )
 				}
@@ -429,7 +426,6 @@ treedater = dater <- function(tre, sts, s=1e3
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
 				o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
-				#o <- .optim.omega.normal0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
 				gammatheta <- unname(o$omega)
 				if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
 				r <- Inf#unname(o$omega)
@@ -487,12 +483,7 @@ treedater = dater <- function(tre, sts, s=1e3
 			bestrv <- rv
 			omega2ll <- ll
 		}
-		#rv
 	}
-	#) -> rvs 
-	
-	#~ 	rvs_lls <- sapply( rvs, function(rv) rv$loglik )
-	#~ 	rv <- rvs[[which.max( rvs_lls )]]
 	
 	rv <- bestrv
 	

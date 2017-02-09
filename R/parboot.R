@@ -47,7 +47,6 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 		 , estimateSampleTimes = est
 		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 		 , numStartConditions = td$numStartConditions 
-		 , ls_adjustRates = td$ls_adjustRates #TODO
 		)}, error = function(e) NA)
 		if (suppressWarnings( is.na( td2[1])) ) return (NA )
 		
