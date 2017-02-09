@@ -112,6 +112,20 @@ require(mgcv)
 	rv
 }
 
+# TODO 
+.optim.Ti4.unconstrained <- function( omega, td )
+{
+	A <- omega * td$A0 
+	B <- td$B0
+	B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omega * td$sts2 )
+	rv <- ( coef( lm ( B ~ A -1 , weights = td$W) ) ) 
+	if (any(is.na(rv))){
+		warning('Numerical error when performing least squares optimisation. Values may be approximate.')
+		rv[is.na(rv)] <- max(rv, na.rm=T)
+		rv <- .hack.times1(rv, td )
+	}
+	rv
+}
 # TODO could also try  package limSolve to add constraints T_i > 0	
 .optim.Ti1 <- function( omegas, Ti, td ){
 	blen <- .Ti2blen( Ti, td )
@@ -156,6 +170,38 @@ require(mgcv)
 			,sp= c()#rep(0,np)
 			,y=B
 			,w=td$W #/omegas # better performance on lsd tests w/o this  
+		)
+		o <- pcls(M)
+	o
+}
+
+#TODO : 
+.optim.Ti3.constrained <- function( omega, td ){
+		 A<- omega * td$A0 
+		B <- td$B0
+		
+		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omega * td$sts2 ) 
+		
+		# initial feasible parameter values:
+		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
+		if (any(is.na(p0))){
+			warning('Numerical error when performing least squares optimisation. Values may be approximate.')
+			p0[is.na(p0)] <- max(p0, na.rm=T)
+		}
+		p1 <- .hack.times1(p0, td )
+		
+		# design
+		M <- list( 
+			X  = A
+			,p = p1
+			,off = c()# rep(0, np)
+			,S=list()
+			,Ain=-td$Ain
+			,bin=-td$bin
+			,C=matrix(0,0,0)
+			,sp= c()#rep(0,np)
+			,y=B
+			,w=td$W #/omegas # better performance on lsd tests w/o this  # TODO try again? 
 		)
 		o <- pcls(M)
 	o
@@ -262,6 +308,7 @@ treedater = dater <- function(tre, sts, s=1e3
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
  , numStartConditions = 0
+ , ls_adjustRates = TRUE #TODO 
 )
 { 
 	# defaults
@@ -315,6 +362,7 @@ treedater = dater <- function(tre, sts, s=1e3
 				, estimateSampleTimes = estimateSampleTimes
 				, estimateSampleTimes_densities = .estimateSampleTimes_densities  
 				, numStartConditions = numStartConditions
+				, ls_adjustRates = ls_adjustRates #TODO
 				) 
 			#}, error = function(e) list( loglik = -Inf)) # 
 		})
@@ -361,13 +409,22 @@ treedater = dater <- function(tre, sts, s=1e3
 		iter <- 0
 		nEdges <- nrow(tre$edge)
 		omegas <- rep( omega0,  nEdges )
+		omega <- omega0 # TODO 
 		edge_lls <- NA
 		rv <- list()
 		while(!done){
 			if (temporalConstraints){
-				Ti <- .optim.Ti2( omegas, td)
+				if ( ls_adjustRates ){
+					Ti <- .optim.Ti2( omegas, td) #TODO
+				} else{
+					Ti <- .optim.Ti3.constrained( omega, td )
+				}
 			} else{
-				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
+				if ( ls_adjustRates){
+					Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
+				} else{
+					Ti <- .optim.Ti4.unconstrained( omega, td )
+				}
 			}
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
@@ -407,9 +464,10 @@ treedater = dater <- function(tre, sts, s=1e3
 				print( gammatheta)
 				print( ll)
 			}
+			omega <- .mean.rate(Ti, r, gammatheta, omegas, td)
 			if ( ll >= lastll ){
 				rv <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
-				 , meanRate = .mean.rate(Ti, r, gammatheta, omegas, td)
+				 , meanRate = omega
 				 , loglik = ll
 				 , edge_lls = edge_lls )
 			}
@@ -463,12 +521,13 @@ treedater = dater <- function(tre, sts, s=1e3
 	if (!EST_SAMP_TIMES) rv$estimateSampleTimes <- NULL
 	rv$estimateSampleTimes_densities <- estimateSampleTimes_densities
 	rv$numStartConditions = numStartConditions
+	rv$ls_adjustRates = ls_adjustRates
 	
 	# add pvals for each edge
 	if (rv$clock=='relaxed'){
 		rv$edge.p <- with(rv, {
 		blen <- pmax(minblen, tre$edge.length)
-		ps <- pmin(1 - 1e-05, theta * blen/(1 + theta * blen))
+		ps <- pmin(1 - 1e-12, theta * blen/(1 + theta * blen))
 			pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
 				prob = 1 - ps)
 		})
@@ -510,6 +569,9 @@ summary.treedater <- function(x) {
 
 treedater.goodness.of.fit.plot <- function(td)
 {
-	plot( 1:length(p)/length(p), sort (p ) , type = 'l', xlab='Theoretical quantiles', ylab='Edge p value'); 
-	abline( a = 0, b = 1 )
+with( td, 
+	{
+		plot( 1:length(edge.p)/length(edge.p), sort (edge.p ) , type = 'l', xlab='Theoretical quantiles', ylab='Edge p value'); 
+		abline( a = 0, b = 1 )
+	})
 }

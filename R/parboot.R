@@ -1,5 +1,5 @@
 
-parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, quiet=TRUE )
+parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=F )
 {
 	if (quiet){
 	cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
@@ -10,13 +10,14 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 	{
 		tre <- list( edge = td$edge, edge.length = td$edge.length, Nnode = td$Nnode, tip.label = td$tip.label)
 		class(tre) <- 'phylo'
-		blen <- pmax( td$minblen, td$edge.length )
+		blen <- pmax( 1e-12, td$edge.length )
 		if( td$clock == 'strict' ) {
 			# simulate poisson 
 			tre$edge.length <- rpois(length(tre$edge.length), blen * td$meanRate * td$s ) / td$s
 		} else {
-			ps <- pmin(1 - 1e-5, td$theta*blen  / ( 1+ td$theta * blen ) )
-			tre$edge.length <- rnbinom( length(tre$edge.length)
+			#ps <- pmin(1 - 1e-5, td$theta*blen  / ( 1+ td$theta * blen ) )
+			ps <- pmin(1 - 1e-12, td$theta*blen  / ( 1+ td$theta * blen ) )
+			tre$edge.length <- rnbinom( length(td$edge.length)
 			 , td$r
 			 , 1 - ps
 			) / td$s
@@ -37,7 +38,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 		}
 		strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
 		
-		td <- tryCatch({ dater(tre, td$sts
+		td2 <- tryCatch({ dater(tre, td$sts
 		 , omega0 = NA#td$meanRate
 		 , minblen = td$minblen
 		 , quiet = TRUE
@@ -46,15 +47,16 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 		 , estimateSampleTimes = est
 		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 		 , numStartConditions = td$numStartConditions 
+		 , ls_adjustRates = td$ls_adjustRates #TODO
 		)}, error = function(e) NA)
-		if (suppressWarnings( is.na( td[1])) ) return (NA )
+		if (suppressWarnings( is.na( td2[1])) ) return (NA )
 		
 		if (!quiet){
 			cat('\n #############################\n')
 			cat( paste( '\n Replicate', k, 'complete \n' ))
-			print( td )
+			print( td2 )
 		}
-		td
+		td2
 	}) -> tds
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	# output rate CIs, parameter CIs, trees
@@ -64,12 +66,17 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 	ttmrcas <- sapply( tds, function(td) td$timeTo )
 	log_mr_sd <- sd(log(meanRates))
 	log_tmrca_sd <- sd( log(ttmrcas ) )
+	if (normalApproxTMRCA){
+		timeOfMRCA_CI <- c( td$timeOfMRCA * exp(-log_tmrca_sd*1.96), td$timeOfMRCA * exp(log_tmrca_sd*1.96 ))
+	} else {
+		timeOfMRCA_CI <- quantile( tmrcas, p = c(.025, .975 ))
+	}
 	rv <- list( 
 		trees = tds
 		, meanRates = meanRates
 		, meanRate_CI = c( exp( log(td$meanRate) - log_mr_sd*1.96), exp(log(td$meanRate) + log_mr_sd*1.96 ))
 		, coef_of_variation_CI = quantile( cvs, probs = c(alpha/2, 1 - alpha/2))
-		, timeOfMRCA_CI = c( td$timeOfMRCA * exp(-log_tmrca_sd*1.96), td$timeOfMRCA * exp(log_tmrca_sd*1.96 ))
+		, timeOfMRCA_CI = timeOfMRCA_CI
 		, td = td
 		, alpha = alpha
 		, level = level
