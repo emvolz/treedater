@@ -175,7 +175,6 @@ require(mgcv)
 	o
 }
 
-#TODO : 
 .optim.Ti3.constrained <- function( omega, td ){
 		 A<- omega * td$A0 
 		B <- td$B0
@@ -323,6 +322,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	if (is.null(estimateSampleTimes)) EST_SAMP_TIMES <- FALSE
 	.estimateSampleTimes_densities <- estimateSampleTimes_densities
 	if (EST_SAMP_TIMES){
+	# TODO midpoint for any missing dates
 		if (class(estimateSampleTimes)=='data.frame'){
 			if ( !('lower' %in% colnames(estimateSampleTimes)) | !('upper' %in% colnames(estimateSampleTimes) ) ){
 				stop(EST_SAMP_TIMES_ERR)
@@ -365,7 +365,9 @@ treedater = dater <- function(tre, sts, s=1e3
 			#}, error = function(e) list( loglik = -Inf)) # 
 		})
 		lls <- sapply( tds, function(td) td$loglik )
-		return ( tds [[ which.max( lls ) ]] )
+		td <- tds [[ which.max( lls ) ]]
+		td$intree_rooted <- FALSE
+		return ( td )
 	} else{
 		if (!quiet) cat( 'Tree is rooted. Not estimating root position.\n')
 	}

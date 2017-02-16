@@ -1,8 +1,14 @@
 
-parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=F )
+parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, quiet=TRUE, normalApproxTMRCA=F )
 {
 	if (quiet){
 	cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
+	}
+	if (overrideSearchRoot){
+		cat('NOTE: Running with overrideSearchRoot will speed up execution but may underestimate variance.\n')
+	}
+	if (overrideTempConstraint){
+		cat('NOTE: Running with overrideTempConstraint will speed up execution but may underestimate variance.\n')
 	}
 	level <- .95
 	alpha <- min(1, max(0, 1 - level ))
@@ -22,7 +28,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 			 , 1 - ps
 			) / td$s
 		}
-		if (!td$intree_rooted) tre <- unroot( tre )
+		if (!td$intree_rooted & !overrideSearchRoot) tre <- unroot( tre )
 		est <- NULL
 		if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
 		tempConstraint <- td$temporalConstraints
@@ -108,8 +114,8 @@ o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$meanRate)
 
 plot.parboot.ltt <- function(pbtd, t0 = NA, res = 100, ... )
 {
-	t1 <- max( pbtd$sts )
-	if (is.na(t0)) t0 <- min( sapply( pbtd$trees), function(tr) tr$timeOf )
+	t1 <- max( pbtd$td$sts, na.rm=T )
+	if (is.na(t0)) t0 <- min( sapply( pbtd$trees, function(tr) tr$timeOf ) )
 	times <- seq( t0, t1, l = res )
 	cbind( times = times , t( sapply( times, function(t){
 		c( pml = sum(pbtd$td$sts > t ) - sum( pbtd$td$Ti>t ) 
@@ -120,7 +126,7 @@ plot.parboot.ltt <- function(pbtd, t0 = NA, res = 100, ... )
 	}))) -> ltt
 
 	pl.df <- as.data.frame( ltt )
-	p <- ggplot( pl.df, ... ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
+	p <- ggplot( pl.df ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
 	p <- p + geom_path( aes(x = times, y = pml ))
 	(p <- p + ylab( 'Lineages through time') + xlab('Time')  )
 }
