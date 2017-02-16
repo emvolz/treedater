@@ -106,9 +106,10 @@ plot( dtr , no.mar=T, cex = .5 )
 ```
 
 ![plot of chunk unnamed-chunk-5](figure/unnamed-chunk-5-1.png)
+
 Note there are a couple of recent lineages that dont seem to fit well with the ladder-like topology. 
 
-Lets see how fast it takes to run treedater:
+Lets see how long it takes to run treedater:
 
 ```r
 rt0 <- Sys.time()
@@ -224,7 +225,8 @@ plot( dtr3 , no.mar=T, cex = .5 )
 ```
 
 ![plot of chunk unnamed-chunk-11](figure/unnamed-chunk-11-1.png)
-Note 1) thed rate is higher than the initial estimate with the relaxed clock; 2) the recently-sampled outlying lineages have been removed. 
+
+The rate is higher than the initial estimate with the relaxed clock and the recently-sampled outlying lineages have been removed. 
 
 ## parametric bootstrap
 Estimating confidence intervals for rates and dates is straightforward using a parametric bootstrap: 
@@ -261,6 +263,8 @@ plot.parboot.ltt( pb )
 ```
 
 ![plot of chunk unnamed-chunk-14](figure/unnamed-chunk-14-1.png)
+
+Note repeated bottlenecks and seasonal peaks of LTT corresponding to when samples are taken during seasonal epidemics.
 
 ## missing sample times
 Suppose we only know sample times to the nearest month, a common occurance in viral phylogenetic studies. 
