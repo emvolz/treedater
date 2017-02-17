@@ -9,7 +9,7 @@
 
 require(ape)
 require(mgcv)
-
+require(limSolve)
 
 .make.tree.data <- function( tre, sampleTimes, s, cc)
 {
@@ -112,37 +112,10 @@ require(mgcv)
 	rv
 }
 
-# TODO 
-.optim.Ti4.unconstrained <- function( omega, td )
-{
-	A <- omega * td$A0 
-	B <- td$B0
-	B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omega * td$sts2 )
-	rv <- ( coef( lm ( B ~ A -1 , weights = td$W) ) ) 
-	if (any(is.na(rv))){
-		warning('Numerical error when performing least squares optimisation. Values may be approximate.')
-		rv[is.na(rv)] <- max(rv, na.rm=T)
-		rv <- .hack.times1(rv, td )
-	}
-	rv
-}
-# TODO could also try  package limSolve to add constraints T_i > 0	
-.optim.Ti1 <- function( omegas, Ti, td ){
-	blen <- .Ti2blen( Ti, td )
-		A <- omegas * td$s *  td$A0 
-		B <- td$B0 
-		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
-		B <- B * td$s
-		return( coef( lm ( B ~ A -1 , weights = 1 / (td$s*blen*omegas) ) ) ) # note blen in units of time
-}
-.Ti.ll1 <-  function( omegas, Ti, td ){
-	blen <- .Ti2blen( Ti, td )
-	A <- omegas * td$s *  td$A0 
-	B <- td$B0 
-	B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
-	B <- B * td$s
-	sum( dnorm( (B - A %*% Ti ), mean=0 , sd=sqrt((td$s*blen*omegas))  , log = T) )
-}
+
+
+
+
 # constraints using quad prog 
 .optim.Ti2 <- function( omegas, td ){
 		A <- omegas * td$A0 
@@ -175,11 +148,11 @@ require(mgcv)
 	o
 }
 
-.optim.Ti3.constrained <- function( omega, td ){
-		 A<- omega * td$A0 
+
+.optim.Ti5.constrained.limsolve <- function(omegas, td){
+		A <- omegas * td$A0 
 		B <- td$B0
-		
-		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omega * td$sts2 ) 
+		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
 		
 		# initial feasible parameter values:
 		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
@@ -188,23 +161,16 @@ require(mgcv)
 			p0[is.na(p0)] <- max(p0, na.rm=T)
 		}
 		p1 <- .hack.times1(p0, td )
-		
-		# design
-		M <- list( 
-			X  = A
-			,p = p1
-			,off = c()# rep(0, np)
-			,S=list()
-			,Ain=-td$Ain
-			,bin=-td$bin
-			,C=matrix(0,0,0)
-			,sp= c()#rep(0,np)
-			,y=B
-			,w=td$W #/omegas # better performance on lsd tests w/o this  # TODO try again? 
-		)
-		o <- pcls(M)
-	o
+	
+	w <- sqrt(td$W)
+	unname( lsei( A = A * w
+	 , B = B * w
+	 , G = -td$Ain
+	 , H = -td$bin
+	 , type = 2
+	)$X )
 }
+
 
 
 .optim.omegas.gammaPoisson1 <- function( Ti, r, gammatheta, td )
@@ -233,18 +199,6 @@ require(mgcv)
 	list( omega = unname( o$minimum), ll = -unname(o$objective) )
 }
 
-.optim.omega.normal0 <- function(Ti, omega0, td)
-{	
-	blen <- .Ti2blen( Ti, td ) 
-	blen <- pmax( quantile( blen, .05 ), blen ) 
-	
-	of <- function(omega)
-	{
-		-sum( dnorm( td$s * td$tre$edge.length,  sd = sqrt( td$s * blen * omega ) ,  log = T) )
-	}
-	o <- optimise(  of, lower = omega0 / 10, upper = omega0 * 10)
-	list( omega = unname( o$minimum), ll = -unname(o$objective) )
-}
 
 .optim.sampleTimes0 <- function( Ti, omegas, estimateSampleTimes, estimateSampleTimes_densities, td, iedge_tiplabel_est_samp_times )
 {
@@ -413,17 +367,10 @@ treedater = dater <- function(tre, sts, s=1e3
 		rv <- list()
 		while(!done){
 			if (temporalConstraints){
-				if ( ls_adjustRates ){
-					Ti <- .optim.Ti2( omegas, td) 
-				} else{
-					Ti <- .optim.Ti3.constrained( omega, td )
-				}
+				#Ti <- .optim.Ti2( omegas, td) 
+				Ti <- .optim.Ti5.constrained.limsolve ( omegas, td ) 
 			} else{
-				if ( ls_adjustRates){
-					Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
-				} else{
-					Ti <- .optim.Ti4.unconstrained( omega, td )
-				}
+				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
 			}
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
