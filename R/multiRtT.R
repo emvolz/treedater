@@ -4,6 +4,7 @@
 .multi.rtt <-
 function (t, tip.dates, topx=1, ncpu = 1, objective = "correlation",  opt.tol = .Machine$double.eps^0.25) 
 {
+	topx <- max( 1, topx)
 	if (objective == "correlation") 
 		objective <- function(x, y) cor.test(y, x)$estimate
 	else if (objective == "rsquared") 

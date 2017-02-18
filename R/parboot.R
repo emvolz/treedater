@@ -1,3 +1,4 @@
+require(foreach)
 
 parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, quiet=TRUE, normalApproxTMRCA=F )
 {
@@ -12,7 +13,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 	}
 	level <- .95
 	alpha <- min(1, max(0, 1 - level ))
-	lapply( 1:nreps, function(k) 
+	tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar%
 	{
 		tre <- list( edge = td$edge, edge.length = td$edge.length, Nnode = td$Nnode, tip.label = td$tip.label)
 		class(tre) <- 'phylo'
@@ -33,7 +34,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 		if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
 		tempConstraint <- td$temporalConstraints
 		if ( overrideTempConstraint) tempConstraint <- FALSE
-				
+		
 		clockstr <- td$clock
 		if (!is.null( overrideClock)){
 			if (is.na(overrideClock)) stop('overrideClock NA. Quitting.')
@@ -43,8 +44,8 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 			clockstr <- overrideClock
 		}
 		strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
-		
-		td2 <- tryCatch({ dater(tre, td$sts
+		td2 <- #tryCatch({ 
+		dater(tre, td$sts
 		 , omega0 = NA#td$meanRate
 		 , minblen = td$minblen
 		 , quiet = TRUE
@@ -53,7 +54,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 		 , estimateSampleTimes = est
 		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 		 , numStartConditions = td$numStartConditions 
-		)}, error = function(e) NA)
+		)#}, error = function(e) NA)
 		if (suppressWarnings( is.na( td2[1])) ) return (NA )
 		
 		if (!quiet){
@@ -62,7 +63,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 			print( td2 )
 		}
 		td2
-	}) -> tds
+	}
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	# output rate CIs, parameter CIs, trees
 	meanRates <- sapply( tds, function(td) td$meanRate )
