@@ -94,7 +94,7 @@ require(limSolve)
 	list( r = r, gammatheta=gammatheta, ll = -o$value)
 }
 
-.optim.Ti0 <- function( omegas, td , scale_var_by_rate){
+.optim.Ti0 <- function( omegas, td , scale_var_by_rate = FALSE){
 		A <- omegas * td$A0 
 		B <- td$B0
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
@@ -264,10 +264,13 @@ treedater = dater <- function(tre, sts, s=1e3
 )
 { 
 	# defaults
-	ls_adjustRates <- TRUE
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
-	scale_var_by_rate <- FALSE # better performance on lsd tests without this 
-	cc <- 1
+	cc <- 10
+	
+	if (class(tre)[1]=='treedater'){
+		cat('Note: dater called with treedater input tree. Will use rooted tree with branch lengths in substitions\n')
+		tre <- tre$intree
+	}
 	
 	numStartConditions <- max(0, round( numStartConditions )) # number of omega0 to try for optimisation
 	
@@ -370,7 +373,7 @@ treedater = dater <- function(tre, sts, s=1e3
 				#Ti <- .optim.Ti2( omegas, td) 
 				Ti <- .optim.Ti5.constrained.limsolve ( omegas, td ) 
 			} else{
-				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate )
+				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate=FALSE )
 			}
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
@@ -436,13 +439,14 @@ treedater = dater <- function(tre, sts, s=1e3
 	
 	rv <- bestrv
 	
-	.tre <- tre
-	td$minblen <- -Inf; blen <- .Ti2blen( rv$Ti, td )
-	tre$edge.length <- blen 
+	#.tre <- tre
+	td$minblen <- -Inf; 
+	blen <- .Ti2blen( rv$Ti, td )
+	#tre$edge.length <- blen 
+	#rv$tre <- tre
 	
-	rv$tre <- tre
 	rv$edge <- tre$edge
-	rv$edge.length <- tre$edge.length
+	rv$edge.length <- blen
 	rv$tip.label <- tre$tip.label
 	rv$Nnode <- tre$Nnode
 	
@@ -451,29 +455,29 @@ treedater = dater <- function(tre, sts, s=1e3
 	rv$s <- s
 	rv$sts <- sts
 	rv$minblen <- minblen
-	rv$intree <- .tre 
+	rv$intree <- tre #.tre
 	rv$coef_of_variation <- ifelse( is.numeric(rv$r), 1 / sqrt(rv$r), NA )
 	rv$clock <- ifelse( is.infinite(rv$r), 'strict', 'relaxed')
 	rv$intree_rooted <- intree_rooted
+	rv$is_intree_rooted <- intree_rooted
 	rv$temporalConstraints <- temporalConstraints
 	rv$estimateSampleTimes <- estimateSampleTimes
 	rv$EST_SAMP_TIMES = EST_SAMP_TIMES
 	if (!EST_SAMP_TIMES) rv$estimateSampleTimes <- NULL
 	rv$estimateSampleTimes_densities <- estimateSampleTimes_densities
 	rv$numStartConditions = numStartConditions
-	rv$ls_adjustRates = ls_adjustRates
 	
 	# add pvals for each edge
 	if (rv$clock=='relaxed'){
 		rv$edge.p <- with(rv, {
-		blen <- pmax(minblen, tre$edge.length)
+		blen <- pmax(minblen, edge.length)
 		ps <- pmin(1 - 1e-12, theta * blen/(1 + theta * blen))
 			pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
 				prob = 1 - ps)
 		})
 	} else{
 		rv$edge.p <- with(rv, {
-			blen <- pmax(minblen, tre$edge.length)
+			blen <- pmax(minblen, edge.length)
 			ppois(pmax(0, round(intree$edge.length * s)), blen * 
 				meanRate * s)
 		})
@@ -486,7 +490,7 @@ treedater = dater <- function(tre, sts, s=1e3
 print.treedater <- function(x, ...){
     cl <- oldClass(x)
     oldClass(x) <- cl[cl != "treedater"]
-    print(x$tre)
+    print(x$intree)
     cat('\n Time of common ancestor \n' )
     cat(paste( x$timeOfMRCA, '\n') )
     cat('\n Time to common ancestor (before most recent sample) \n' )
