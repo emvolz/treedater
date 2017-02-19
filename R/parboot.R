@@ -15,8 +15,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 	level <- .95
 	alpha <- min(1, max(0, 1 - level ))
 
-#~ 	.parboot.replicate <- function( td, overrideSearchRoot, overrideClock , quiet )
-	.parboot.replicate <- function(  )
+	.parboot.replicate <- function( k  = NA )
 	{
 		tre <- list( edge = td$edge, edge.length = td$edge.length, Nnode = td$Nnode, tip.label = td$tip.label)
 			class(tre) <- 'phylo'
@@ -37,7 +36,6 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 			if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
 			tempConstraint <- td$temporalConstraints
 			if ( overrideTempConstraint) tempConstraint <- FALSE
-			
 			clockstr <- td$clock
 			if (!is.null( overrideClock)){
 				if (is.na(overrideClock)) stop('overrideClock NA. Quitting.')
@@ -47,9 +45,8 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 				clockstr <- overrideClock
 			}
 			strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
-			td2 <- #tryCatch({ 
-			dater(tre, td$sts
-			 , omega0 = NA#td$meanRate
+			td2 <- dater(tre, td$sts
+			 , omega0 = NA
 			 , minblen = td$minblen
 			 , quiet = TRUE
 			 , temporalConstraints = tempConstraint
@@ -57,7 +54,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 			 , estimateSampleTimes = est
 			 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 			 , numStartConditions = td$numStartConditions 
-			)#}, error = function(e) NA)
+			)
 			if (suppressWarnings( is.na( td2[1])) ) return (NA )
 			
 			if (!quiet){
@@ -71,14 +68,13 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 	if (ncpu > 1)
 	{
 		if (parallel_foreach){
-			tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% .parboot.replicate()# td, overrideSearchRoot, overrideClock , quiet ) 
+			tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% .parboot.replicate(k)
 		} else{
-			tds <- parallel::mclapply( 1:nreps, function(k) .parboot.replicate() #td, overrideSearchRoot, overrideClock , quiet ) 
-			, mc.cores = ncpu ) # TODO namespace error here 
-			 
+			tds <- parallel::mclapply( 1:nreps, function(k) .parboot.replicate(k) 
+			, mc.cores = ncpu ) 
 		}
 	} else{
-		tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %do% .parboot.replicate( )#td, overrideSearchRoot, overrideClock , quiet )
+		tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %do% .parboot.replicate( k)#td, overrideSearchRoot, overrideClock , quiet )
 	}
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	# output rate CIs, parameter CIs, trees
