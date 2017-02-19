@@ -9,6 +9,7 @@
 
 require(ape)
 require(limSolve)
+require(mgcv)
 
 .make.tree.data <- function( tre, sampleTimes, s, cc)
 {
@@ -139,7 +140,39 @@ require(limSolve)
 }
 
 
+# <constrained ls>
+.optim.Ti2 <- function( omegas, td ){
+		A <- omegas * td$A0 
+		B <- td$B0
+		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
+		
+		# initial feasible parameter values:
+		#p0 <- ( coef( lm ( B ~ A -1 , weights = td$W/omegas) ) )
+		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
+		if (any(is.na(p0))){
+			warning('Numerical error when performing least squares optimisation. Values may be approximate.')
+			p0[is.na(p0)] <- max(p0, na.rm=T)
+		}
+		p1 <- .hack.times1(p0, td )
+		
+		# design
+		M <- list( 
+			X  = A
+			,p = p1
+			,off = c()# rep(0, np)
+			,S=list()
+			,Ain=-td$Ain
+			,bin=-td$bin
+			,C=matrix(0,0,0)
+			,sp= c()#rep(0,np)
+			,y=B
+			,w=td$W #/omegas # better performance on lsd tests w/o this  
+		)
+		o <- pcls(M)
+	o
+}
 
+#</ constrained ls>
 .optim.omegas.gammaPoisson1 <- function( Ti, r, gammatheta, td )
 {
 	blen <- .Ti2blen( Ti, td )
@@ -228,8 +261,10 @@ treedater = dater <- function(tre, sts, s=1e3
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
  , numStartConditions = 0
+ , clsSolver=c('limSolve', 'mgcv')
 )
 { 
+	clsSolver <- clsSolver[1]
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
@@ -337,7 +372,12 @@ treedater = dater <- function(tre, sts, s=1e3
 		rv <- list()
 		while(!done){
 			if (temporalConstraints){
-				Ti <- .optim.Ti5.constrained.limsolve ( omegas, td ) 
+				if (clsSolver=='limSolve'){
+					Ti <- tryCatch( .optim.Ti5.constrained.limsolve ( omegas, td ) 
+					 , error = function(e) .optim.Ti2( omegas, td)  )
+				} else{
+					Ti <- .optim.Ti2( omegas, td)  
+				}
 			} else{
 				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate=FALSE )
 			}

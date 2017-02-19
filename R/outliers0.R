@@ -1,5 +1,6 @@
 
-outlier.tips <- function(td, alpha = .01){
+outlier.lineages <- function(td, alpha = .01, type=c('tips','internal', 'all')){
+	if (length(type)>1) type <- type[1]
 	if ( !td$temporalConstraints ){
 		stop('The outlier.tips function requires a treedater object fitted using temporalConstraints=TRUE. Quitting.')
 	}
@@ -32,19 +33,46 @@ outlier.tips <- function(td, alpha = .01){
 	p <- p * 2 
 	n <- length( td$tip.label )
 	tipEdges <- which( td$edge[,2] <= n )
-	qu.df <- data.frame( taxon = td$tip.label[ td$edge[tipEdges,2]]
-	  , q = unname( p.adjust( p[tipEdges], method = 'fdr' ) )
-	  , p  = unname( p[tipEdges] ) 
-	  , loglik = unname( lls[tipEdges])
-	  , rates = unname( td$omegas[tipEdges] )
-	  , branch.length = td$edge.length[ tipEdges] 
-	)
+	intEdges <- setdiff( 1:nrow(td$edge), tipEdges )
+	if ( type == 'tips'){
+		qu.df <- data.frame( taxon = td$tip.label[ td$edge[tipEdges,2]]
+		  , q = unname( p.adjust( p[tipEdges], method = 'fdr' ) )
+		  , p  = unname( p[tipEdges] ) 
+		  , loglik = unname( lls[tipEdges])
+		  , rates = unname( td$omegas[tipEdges] )
+		  , branch.length = td$edge.length[ tipEdges] 
+		)
+		rownames(qu.df) <- qu.df$taxon
+	} else if ( type == 'internal'){
+		qu.df <- data.frame( 
+		   q = unname( p.adjust( p[intEdges], method = 'fdr' ) )
+		  , p  = unname( p[intEdges] ) 
+		  , loglik = unname( lls[intEdges])
+		  , rates = unname( td$omegas[intEdges] )
+		  , branch.length = td$edge.length[ intEdges ] 
+		  , edgeIndex = intEdges
+		)
+		#rownames(qu.df) <- qu.df$intEdges
+	} else{
+		qu.df <- data.frame(
+		   q = unname( p.adjust( p, method = 'fdr' ) )
+		  , p  = unname( p ) 
+		  , loglik = unname( lls)
+		  , rates = unname( td$omegas )
+		  , branch.length = td$edge.length 
+		  , edgeIndex = 1:nrow(td$edge)
+		)
+	}
 	qu.df <- qu.df[ order( qu.df$q), ]
-	rownames(qu.df) <- qu.df$taxon
-	qu.df <- qu.df[,-1] 
+	
 	qu.df1 <- qu.df[ qu.df$q <  alpha , ]
 	
 	print( qu.df1 )
 	qu.df
 }
 
+
+
+outlier.tips <- function( td, alpha = .01){
+	outlier.lineages(td, alpha = .01)
+}
