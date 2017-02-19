@@ -262,6 +262,8 @@ treedater = dater <- function(tre, sts, s=1e3
  , estimateSampleTimes_densities= list()
  , numStartConditions = 0
  , clsSolver=c('limSolve', 'mgcv')
+ , ncpu = 1
+ , parallel_foreach = FALSE
 )
 { 
 	clsSolver <- clsSolver[1]
@@ -312,17 +314,38 @@ treedater = dater <- function(tre, sts, s=1e3
 		intree_rooted <- FALSE
 		if (!quiet) cat( 'Tree is not rooted. Searching for best root position. Increase searchRoot to try harder.\n')
 		searchRoot <- round( searchRoot )
-		rtres <- .multi.rtt(tre, sts, topx=searchRoot)
-		tds <- lapply( rtres, function(t) {
-			#tryCatch( {
-				dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-				, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
-				, estimateSampleTimes = estimateSampleTimes
-				, estimateSampleTimes_densities = .estimateSampleTimes_densities  
-				, numStartConditions = numStartConditions
-				) 
-			#}, error = function(e) list( loglik = -Inf)) # 
-		})
+		rtres <- .multi.rtt(tre, sts, topx=searchRoot, ncpu = ncpu)
+		if (ncpu > 1 )
+		{
+			if (parallel_foreach){
+				tds <- foreach( t = iter( rtres )) %dopar% {
+					dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
+						, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+						, estimateSampleTimes = estimateSampleTimes
+						, estimateSampleTimes_densities = .estimateSampleTimes_densities  
+						, numStartConditions = numStartConditions
+						) 
+				}
+			} else{
+				tds <- parallel::mclapply( rtres, function(t){
+					dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
+						, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+						, estimateSampleTimes = estimateSampleTimes
+						, estimateSampleTimes_densities = .estimateSampleTimes_densities  
+						, numStartConditions = numStartConditions
+						) 
+				}, mc.cores = ncpu )
+			}
+		} else{
+			tds <- lapply( rtres, function(t) {
+					dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
+					, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+					, estimateSampleTimes = estimateSampleTimes
+					, estimateSampleTimes_densities = .estimateSampleTimes_densities  
+					, numStartConditions = numStartConditions
+					) 
+			})
+		}
 		lls <- sapply( tds, function(td) td$loglik )
 		td <- tds [[ which.max( lls ) ]]
 		td$intree_rooted <- FALSE

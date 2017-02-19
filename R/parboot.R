@@ -1,6 +1,7 @@
 require(foreach)
 
-parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, quiet=TRUE, normalApproxTMRCA=F )
+
+parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, quiet=TRUE, normalApproxTMRCA=F, ncpu = 1, parallel_foreach = FALSE )
 {
 	if (quiet){
 	cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
@@ -13,56 +14,71 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 	}
 	level <- .95
 	alpha <- min(1, max(0, 1 - level ))
-	tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar%
+
+#~ 	.parboot.replicate <- function( td, overrideSearchRoot, overrideClock , quiet )
+	.parboot.replicate <- function(  )
 	{
 		tre <- list( edge = td$edge, edge.length = td$edge.length, Nnode = td$Nnode, tip.label = td$tip.label)
-		class(tre) <- 'phylo'
-		blen <- pmax( 1e-12, td$edge.length )
-		if( td$clock == 'strict' ) {
-			# simulate poisson 
-			tre$edge.length <- rpois(length(tre$edge.length), blen * td$meanRate * td$s ) / td$s
-		} else {
-			#ps <- pmin(1 - 1e-5, td$theta*blen  / ( 1+ td$theta * blen ) )
-			ps <- pmin(1 - 1e-12, td$theta*blen  / ( 1+ td$theta * blen ) )
-			tre$edge.length <- rnbinom( length(td$edge.length)
-			 , td$r
-			 , 1 - ps
-			) / td$s
-		}
-		if (!td$intree_rooted & !overrideSearchRoot) tre <- unroot( tre )
-		est <- NULL
-		if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
-		tempConstraint <- td$temporalConstraints
-		if ( overrideTempConstraint) tempConstraint <- FALSE
-		
-		clockstr <- td$clock
-		if (!is.null( overrideClock)){
-			if (is.na(overrideClock)) stop('overrideClock NA. Quitting.')
-			if (!overrideClock %in% c('strict', 'relaxed') ){
-				stop('overrideClock must be one of strict or relaxed')
+			class(tre) <- 'phylo'
+			blen <- pmax( 1e-12, td$edge.length )
+			if( td$clock == 'strict' ) {
+				# simulate poisson 
+				tre$edge.length <- rpois(length(tre$edge.length), blen * td$meanRate * td$s ) / td$s
+			} else {
+				#ps <- pmin(1 - 1e-5, td$theta*blen  / ( 1+ td$theta * blen ) )
+				ps <- pmin(1 - 1e-12, td$theta*blen  / ( 1+ td$theta * blen ) )
+				tre$edge.length <- rnbinom( length(td$edge.length)
+				 , td$r
+				 , 1 - ps
+				) / td$s
 			}
-			clockstr <- overrideClock
+			if (!td$intree_rooted & !overrideSearchRoot) tre <- unroot( tre )
+			est <- NULL
+			if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
+			tempConstraint <- td$temporalConstraints
+			if ( overrideTempConstraint) tempConstraint <- FALSE
+			
+			clockstr <- td$clock
+			if (!is.null( overrideClock)){
+				if (is.na(overrideClock)) stop('overrideClock NA. Quitting.')
+				if (!overrideClock %in% c('strict', 'relaxed') ){
+					stop('overrideClock must be one of strict or relaxed')
+				}
+				clockstr <- overrideClock
+			}
+			strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
+			td2 <- #tryCatch({ 
+			dater(tre, td$sts
+			 , omega0 = NA#td$meanRate
+			 , minblen = td$minblen
+			 , quiet = TRUE
+			 , temporalConstraints = tempConstraint
+			 , strictClock = strictClock
+			 , estimateSampleTimes = est
+			 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
+			 , numStartConditions = td$numStartConditions 
+			)#}, error = function(e) NA)
+			if (suppressWarnings( is.na( td2[1])) ) return (NA )
+			
+			if (!quiet){
+				cat('\n #############################\n')
+				cat( paste( '\n Replicate', k, 'complete \n' ))
+				print( td2 )
+			}
+			td2
+	}
+
+	if (ncpu > 1)
+	{
+		if (parallel_foreach){
+			tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% .parboot.replicate()# td, overrideSearchRoot, overrideClock , quiet ) 
+		} else{
+			tds <- parallel::mclapply( 1:nreps, function(k) .parboot.replicate() #td, overrideSearchRoot, overrideClock , quiet ) 
+			, mc.cores = ncpu ) # TODO namespace error here 
+			 
 		}
-		strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
-		td2 <- #tryCatch({ 
-		dater(tre, td$sts
-		 , omega0 = NA#td$meanRate
-		 , minblen = td$minblen
-		 , quiet = TRUE
-		 , temporalConstraints = tempConstraint
-		 , strictClock = strictClock
-		 , estimateSampleTimes = est
-		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
-		 , numStartConditions = td$numStartConditions 
-		)#}, error = function(e) NA)
-		if (suppressWarnings( is.na( td2[1])) ) return (NA )
-		
-		if (!quiet){
-			cat('\n #############################\n')
-			cat( paste( '\n Replicate', k, 'complete \n' ))
-			print( td2 )
-		}
-		td2
+	} else{
+		tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %do% .parboot.replicate( )#td, overrideSearchRoot, overrideClock , quiet )
 	}
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	# output rate CIs, parameter CIs, trees
