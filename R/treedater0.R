@@ -105,7 +105,7 @@ require(mgcv)
 			rv <- ( coef( lm ( B ~ A -1 , weights = td$W) ) ) 
 		}
 	if (any(is.na(rv))){
-		warning('Numerical error when performing least squares optimisation. Values may be approximate.')
+		warning('Numerical error when performing least squares optimisation. Values are approximate. Try adjusting minimum branch length(`minblen`) and/or initial rate omega0.')
 		rv[is.na(rv)] <- max(rv, na.rm=T)
 		rv <- .hack.times1(rv, td )
 	}
@@ -125,7 +125,7 @@ require(mgcv)
 		# initial feasible parameter values:
 		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
 		if (any(is.na(p0))){
-			warning('Numerical error when performing least squares optimisation. Values may be approximate.')
+			warning('Numerical error when performing least squares optimisation. Values are approximate. Try adjusting minimum branch length(`minblen`) and/or initial rate omega0.')
 			p0[is.na(p0)] <- max(p0, na.rm=T)
 		}
 		p1 <- .hack.times1(p0, td )
@@ -150,7 +150,7 @@ require(mgcv)
 		#p0 <- ( coef( lm ( B ~ A -1 , weights = td$W/omegas) ) )
 		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
 		if (any(is.na(p0))){
-			warning('Numerical error when performing least squares optimisation. Values may be approximate.')
+			warning('Numerical error when performing least squares optimisation. Values are approximate. Try adjusting minimum branch length(`minblen`) and/or initial rate omega0.')
 			p0[is.na(p0)] <- max(p0, na.rm=T)
 		}
 		p1 <- .hack.times1(p0, td )
@@ -355,6 +355,7 @@ treedater = dater <- function(tre, sts, s=1e3
 	}
 	if (is.na(minblen)){
 		minblen <- diff(range(sts))/100/ length(sts) #TODO choice of this parm is difficult, may require sep optim / crossval
+		cat(paste0('Note: Minimum temporal branch length set to ', minblen, '. Increase this value in the event of convergence failures. \n'))
 	}
 	if (!is.na(omega0) & numStartConditions > 0 ){
 		warning('omega0 provided incompatible with numStartConditions > 0. Setting numStartConditions to zero.')
