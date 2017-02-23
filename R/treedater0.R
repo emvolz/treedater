@@ -354,7 +354,7 @@ treedater = dater <- function(tre, sts, s=1e3
 		if (!quiet) cat( 'Tree is rooted. Not estimating root position.\n')
 	}
 	if (is.na(minblen)){
-		minblen <- diff(range(sts))/100/ length(sts) #TODO choice of this parm is difficult, may require sep optim / crossval
+		minblen <- diff(range(sts))/10/ length(sts) #TODO choice of this parm is difficult, may require sep optim / crossval
 		cat(paste0('Note: Minimum temporal branch length set to ', minblen, '. Increase this value in the event of convergence failures. \n'))
 	}
 	if (!is.na(omega0) & numStartConditions > 0 ){
