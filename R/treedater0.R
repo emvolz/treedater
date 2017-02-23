@@ -463,7 +463,7 @@ treedater = dater <- function(tre, sts, s=1e3
 		}
 		if ( omega2ll < rv$loglik){
 			bestrv <- rv
-			omega2ll <- ll
+			omega2ll <- rv$loglik
 		}
 	}
 	
