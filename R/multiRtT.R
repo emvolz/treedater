@@ -1,5 +1,6 @@
 ###
-# based on ape::rtt
+# based on ape::rtt developed by  Rosemary McCloskey, BC Centre for Excellence in HIV/AIDS, released under GPL
+# retrieved December 2016 from https://github.com/cran/ape/blob/master/R/rtt.R
 # returns multiple rooted trees reflecting best fits of root-to-tip regression
 .multi.rtt <-
 function (t, tip.dates, topx=1, ncpu = 1, objective = "correlation",  opt.tol = .Machine$double.eps^0.25) 

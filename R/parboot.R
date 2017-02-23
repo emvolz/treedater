@@ -205,7 +205,7 @@ boot.treedater <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 
 			clockstr <- overrideClock
 		}
 		strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
-		td2 <- dater(tre, td$sts
+		td2 <- dater(tre, td$sts, s= td$s
 		 , omega0 = NA
 		 , minblen = td$minblen
 		 , quiet = TRUE
