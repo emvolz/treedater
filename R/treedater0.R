@@ -367,6 +367,10 @@ treedater = dater <- function(tre, sts, s=1e3
 		g0 <- lm(ape::node.depth.edgelength(tre)[1:length(sts)] ~ sts, na.action = na.omit)
 		omega0sd <- summary( g0 )$coef[2,2]
 		omega0 <- unname( coef(g0)[2] )
+		if (omega0 < 0 ){
+			warning('Root to tip regression predicts a substition rate less than zero. Tree may be poorly rooted or there may be small temporal signal.')
+			omega0 <- abs(omega0)/10
+		}
 		omega0s <- qnorm( unique(sort(c(.5, seq(.025, .975, l=numStartConditions*2) )))  , omega0, sd = omega0sd )
 		omega0s <- omega0s[ omega0s > 0 ]
 		if (!quiet){

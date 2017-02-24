@@ -47,6 +47,9 @@ function (t, tip.dates, topx=1, ncpu = 1, objective = "correlation",  opt.tol = 
 			best.edge.length)
 		ut <- collapse.singles(ut)
 		ut <- root(ut, "new.root")
-		drop.tip(ut, "new.root")
-	}) 
+		x <- drop.tip(ut, "new.root")
+		if (!is.rooted(x)) return(NULL)
+		x
+	})-> tres
+	tres[ !sapply( tres, is.null) ] 
 }
