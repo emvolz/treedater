@@ -323,6 +323,10 @@ treedater = dater <- function(tre, sts, s=1e3
 )
 { 
 	clsSolver <- clsSolver[1]
+	if (clsSolver=='limSolve' & !requireNamespace("limSolve", quietly = TRUE)) {
+		warning( 'Suggested package limSolve is not available. Continuing with mgcv.' )
+		clsSolver <- 'mgcv' 
+	} 
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
