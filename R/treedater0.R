@@ -50,16 +50,31 @@ require(mgcv)
 	W <- abs( 1/( (tre$edge.length + cc / s)/s) ) 
 	#W <- abs( 1/( pmax(.001,tre$edge.length) )/s)
 	
-	list( A0 = A, B0 = B, W0 = W, n = n, tipEdges=tipEdges
+	# rootOptim1: remove edges descended from root from ls matrices
+	rootNode <- which( is.na( parent ))
+	iRootEdges <- which( tre$edge[,1] == rootNode )
+	#~ 	A <- A[-iRootEdges,] 
+	#~ 	B <- B[-iRootEdges] 
+	#~ 	Ain <- Ain[-iRootEdges,] 
+	#~ 	bin <- bin[-iRootEdges] 
+	minW <- min(W)
+	W[ iRootEdges ] <- minW / 100 # don't use these edges for ls
+	
+	
+	list( A0 = A, B0 = B, W0 = W
+	 , n = n, tipEdges=tipEdges
 	 , i_tip_edge2label = i_tip_edge2label
 	 , sts2 = sts  # in order of tipEdges
 	 , sts1 = sampleTimes[ tre$tip.label] # in order of tip.label
 	 , sts = sampleTimes
-	 , s = s, cc = cc, tre = tre
+	 , s = s, cc = cc
+	 , tre = tre
 	 , daughters = daughters
 	 , parent = parent
 	 , Ain = Ain
 	 , bin = bin
+	 , rootNode = rootNode 
+	 , iRootEdges = iRootEdges
 	)
 }
 
@@ -70,7 +85,7 @@ require(mgcv)
 }
 
 .optim.r.gammatheta.nbinom0 <- function(  Ti, r0, gammatheta0, td)
-{	
+{
 	blen <- .Ti2blen( Ti, td )
 	
 	#NOTE relative to wikipedia page on NB:
@@ -82,8 +97,9 @@ require(mgcv)
 		gammatheta <- exp( x['lngammatheta'] )
 		if (is.infinite(r) | is.infinite(gammatheta)) return(Inf)
 		ps <- pmin(1 - 1e-5, gammatheta*blen / ( 1+ gammatheta * blen ) )
-		ov <- -sum( dnbinom( pmax(0, round(td$tre$edge.length*td$s))
-		  , size= r, prob=1-ps,  log = T) )
+		# dont use root edges in this calc; 
+		ov <- -sum( dnbinom( pmax(0, round(td$tre$edge.length[-td$iRootEdges]*td$s))
+		  , size= r, prob=1-ps[-td$iRootEdges],  log = T) )
 		ov 
 	}
 	x0 <- c( lnr = unname(log(r0)), lngammatheta = unname( log(gammatheta0)))
@@ -92,6 +108,58 @@ require(mgcv)
 	r <- unname( exp( o$par['lnr'] ))
 	gammatheta <- unname( exp( o$par['lngammatheta'] ))
 	list( r = r, gammatheta=gammatheta, ll = -o$value)
+}
+
+
+.optim.omega.poisson0 <- function(Ti, omega0, td)
+{	
+	blen <- .Ti2blen( Ti, td )
+	
+	of <- function(omega)
+	{
+		# dont use root edges in this calc; 
+		-sum( dpois( pmax(0, round(td$tre$edge.length[-td$iRootEdges]*td$s)), td$s * blen[-td$iRootEdges] * omega ,  log = T) )
+	}
+	o <- optimise(  of, lower = omega0 / 10, upper = omega0 * 10)
+	list( omega = unname( o$minimum), ll = -unname(o$objective) )
+}
+
+
+.optim.root.time <- function ( Ti, td , r, gammatheta) 
+{
+	t <- c( td$sts1, Ti )
+	uv <- td$daughters[ td$rootNode, ]
+	tu <- t[ uv[1]]
+	tv <- t[ uv[2]]
+	mindgtr_t <- min( tu, tv)
+	b<- sum( td$tre$edge.length[ td$iRootEdges ] )
+	if (is.infinite( r )){
+		.of <- function(troot)
+		{
+			troot <- min( mindgtr_t , troot )
+			dxu <- tu - troot 
+			dxv <-  tv - troot
+			dx <- dxu + dxv
+			-dpois( max(0, round(b*td$s)), td$s * dx * gammatheta ,  log = T) 
+		}
+	} else{
+		.of <- function ( troot )
+		{
+			troot <- min( mindgtr_t , troot )
+			dxu <- tu - troot 
+			dxv <-  tv - troot
+			dx <- dxu + dxv
+			ps <- min(1 - 1e-12, gammatheta*dx / ( 1+ gammatheta * dx ) )
+			-dnbinom( pmax(0, round(b*td$s))
+			  , size= r, prob=1-ps,  log = T) 
+		}
+	}
+	lb <- mindgtr_t - 100 * abs( mindgtr_t - t[td$rootNode] )
+	troot <- tryCatch( unname( optimise(.of, upper = mindgtr_t
+		  , lower = lb  )$minimum )
+	 , error = function(e) unname(t[td$rootNode]) )
+	list( troot = troot, ll = -unname(.of( troot)) )
+	
 }
 
 .optim.Ti0 <- function( omegas, td , scale_var_by_rate = FALSE){
@@ -185,18 +253,6 @@ require(mgcv)
 		c(lam_star / blen[k] / td$s, ll )
 	}) 
 	list( omegas = o[1,], ll = unname(sum( o[2,] )), lls  = unname(o[2,])  )
-}
-
-.optim.omega.poisson0 <- function(Ti, omega0, td)
-{	
-	blen <- .Ti2blen( Ti, td )
-	
-	of <- function(omega)
-	{
-		-sum( dpois( pmax(0, round(td$tre$edge.length*td$s)), td$s * blen * omega ,  log = T) )
-	}
-	o <- optimise(  of, lower = omega0 / 10, upper = omega0 * 10)
-	list( omega = unname( o$minimum), ll = -unname(o$objective) )
 }
 
 
@@ -409,19 +465,21 @@ treedater = dater <- function(tre, sts, s=1e3
 			} else{
 				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate=FALSE )
 			}
+			troot_rootll <- .optim.root.time( Ti, td, r, gammatheta )
+			Ti[ td$rootNode - td$n ]  <- troot_rootll$troot 
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
 				o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
 				gammatheta <- unname(o$omega)
 				if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
 				r <- Inf#unname(o$omega)
-				ll <- o$ll
+				ll <- o$ll + troot_rootll$ll
 				edge_lls <- 0
 				omegas <- rep( gammatheta, length(omegas))
 			} else{
 				o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td)
 				r <- o$r
-				ll <- o$ll
+				ll <- o$ll + troot_rootll$ll
 				gammatheta <- o$gammatheta
 				oo <- .optim.omegas.gammaPoisson1( Ti, o$r, o$gammatheta, td ) 
 				edge_lls <- oo$lls
