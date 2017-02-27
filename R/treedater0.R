@@ -69,7 +69,7 @@ require(mgcv)
 	pmax(td$minblen,-elmat[,1]  + elmat[,2] )
 }
 
-.optim.r.gammatheta.nbinom0 <- function(  Ti, r0, gammatheta0, td)
+.optim.r.gammatheta.nbinom0 <- function(  Ti, r0, gammatheta0, td, lnd.mean.rate.prior)
 {	
 	blen <- .Ti2blen( Ti, td )
 	
@@ -84,15 +84,32 @@ require(mgcv)
 		ps <- pmin(1 - 1e-5, gammatheta*blen / ( 1+ gammatheta * blen ) )
 		ov <- -sum( dnbinom( pmax(0, round(td$tre$edge.length*td$s))
 		  , size= r, prob=1-ps,  log = T) )
+		mr <-  r * gammatheta / td$s # Note this value will differ slightly from output of .mean.rate
+		ov <- ov - unname(lnd.mean.rate.prior( mr ))
 		ov 
 	}
 	x0 <- c( lnr = unname(log(r0)), lngammatheta = unname( log(gammatheta0)))
 	#o <- optim( par = x0, fn = of, method = 'BFGS' )
+	if ( is.infinite( of( x0 )) ) stop( 'Can not optimize rate parameters from initial conditions. Try adjusting *meanRateLimits*.' )
 	o <- optim( par = x0, fn = of)
 	r <- unname( exp( o$par['lnr'] ))
 	gammatheta <- unname( exp( o$par['lngammatheta'] ))
 	list( r = r, gammatheta=gammatheta, ll = -o$value)
 }
+
+.optim.omega.poisson0 <- function(Ti, omega0, td, lnd.mean.rate.prior)
+{	
+	blen <- .Ti2blen( Ti, td )
+	
+	of <- function(omega)
+	{
+		-sum( dpois( pmax(0, round(td$tre$edge.length*td$s)), td$s * blen * omega ,  log = T) ) - unname(lnd.mean.rate.prior( omega ))
+	}
+	o <- optimise(  of, lower = omega0 / 10, upper = omega0 * 10)
+	list( omega = unname( o$minimum), ll = -unname(o$objective) )
+}
+
+
 
 .optim.Ti0 <- function( omegas, td , scale_var_by_rate = FALSE){
 		A <- omegas * td$A0 
@@ -178,25 +195,13 @@ require(mgcv)
 	blen <- .Ti2blen( Ti, td )
 	o <- sapply( 1:nrow(td$tre$edge), function(k){
 		sb <- (td$tre$edge.length[k]*td$s)
-		lb <- qgamma(1e-5,  shape=r, scale = gammatheta*blen[k] )
+		lb <- qgamma(1e-6,  shape=r, scale = gammatheta*blen[k] )
 		lam_star <- max(lb, gammatheta * blen[k] * (sb + r - 1) / (gammatheta * blen[k] + 1)  )
 		ll <- 	dpois( max(0, round(sb)),lam_star, log=T )  + 
 		 dgamma(lam_star, shape=r, scale = gammatheta*blen[k], log = T)
 		c(lam_star / blen[k] / td$s, ll )
 	}) 
 	list( omegas = o[1,], ll = unname(sum( o[2,] )), lls  = unname(o[2,])  )
-}
-
-.optim.omega.poisson0 <- function(Ti, omega0, td)
-{	
-	blen <- .Ti2blen( Ti, td )
-	
-	of <- function(omega)
-	{
-		-sum( dpois( pmax(0, round(td$tre$edge.length*td$s)), td$s * blen * omega ,  log = T) )
-	}
-	o <- optimise(  of, lower = omega0 / 10, upper = omega0 * 10)
-	list( omega = unname( o$minimum), ll = -unname(o$objective) )
 }
 
 
@@ -235,7 +240,7 @@ require(mgcv)
 
 .hack.times1 <- function(Ti, td)
 {
-#~ 	t <- c( td$sts2[td$tre$tip.label], Ti)
+	#~ 	t <- c( td$sts2[td$tre$tip.label], Ti)
 	t <- c( td$sts1[td$tre$tip.label], Ti)
 	inodes <- (td$n+1):length(t)
 	
@@ -262,6 +267,7 @@ treedater = dater <- function(tre, sts, s=1e3
  , estimateSampleTimes_densities= list()
  , numStartConditions = 0
  , clsSolver=c('limSolve', 'mgcv')
+ , meanRateLimits = NULL
  , ncpu = 1
  , parallel_foreach = FALSE
 )
@@ -276,6 +282,20 @@ treedater = dater <- function(tre, sts, s=1e3
 		tre <- tre$intree
 	}
 	
+	# optional limits or prior for mean rate
+	lnd.mean.rate.prior <- function(x) 0 #dunif( x , 0, Inf, log=TRUE )
+	if (is.null( meanRateLimits) ) {
+		meanRateLimits <- c( 0, Inf)
+	} else if ( class(meanRateLimits)=='function'){
+		lnd.mean.rate.prior <- meanRateLimits
+		meanRateLimits <- c(0, Inf)
+	} else{
+		MEANRATEERR <- '*meanRateLimits* should be a length 2 vector providing bounds on the mean rate parameter OR a function providing the log prior density of the mean rate parameter. '
+		if (length( meanRateLimits) != 2) stop(MEANRATEERR)
+		if (meanRateLimits[2] <= meanRateLimits[1]) stop(MEANRATEERR)
+		#lnd.mean.rate.prior <- function(x) dunif( x , meanRateLimits[1], meanRateLimits[2], log= TRUE )
+		lnd.mean.rate.prior <- function(x) ifelse( x >= meanRateLimits[1] & x <= meanRateLimits[2], 0, -Inf )
+	}
 	numStartConditions <- max(0, round( numStartConditions )) # number of omega0 to try for optimisation
 	
 	EST_SAMP_TIMES <- TRUE
@@ -324,6 +344,7 @@ treedater = dater <- function(tre, sts, s=1e3
 						, estimateSampleTimes = estimateSampleTimes
 						, estimateSampleTimes_densities = .estimateSampleTimes_densities  
 						, numStartConditions = numStartConditions
+						, meanRateLimits = meanRateLimits
 						) 
 				}
 			} else{
@@ -333,6 +354,7 @@ treedater = dater <- function(tre, sts, s=1e3
 						, estimateSampleTimes = estimateSampleTimes
 						, estimateSampleTimes_densities = .estimateSampleTimes_densities  
 						, numStartConditions = numStartConditions
+						, meanRateLimits = meanRateLimits
 						) 
 				}, mc.cores = ncpu )
 			}
@@ -343,6 +365,7 @@ treedater = dater <- function(tre, sts, s=1e3
 					, estimateSampleTimes = estimateSampleTimes
 					, estimateSampleTimes_densities = .estimateSampleTimes_densities  
 					, numStartConditions = numStartConditions
+					, meanRateLimits = meanRateLimits
 					) 
 			})
 		}
@@ -380,6 +403,14 @@ treedater = dater <- function(tre, sts, s=1e3
 	} else{
 		omega0s <- c( omega0 )
 	}
+	if ( any ( omega0s < meanRateLimits[1] ) | any( omega0s > meanRateLimits[2])){
+		warning('Initial guess of mean rate falls outside of user-specified limits.')
+		omega0s <- omega0s[  omega0s >= meanRateLimits[1] & omega0s <= meanRateLimits[2] ]
+	}
+	if (length(omega0s)==0){
+		warning( 'Setting initial guess of mean rate to be mid-point of *meanRateLimits*')
+		omega0s <- (meanRateLimits[1] + meanRateLimits[2]) / 2
+	}
 	td <- .make.tree.data(tre, sts, s, cc )
 	td$minblen <- minblen
 	
@@ -411,7 +442,7 @@ treedater = dater <- function(tre, sts, s=1e3
 			}
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
-				o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td)
+				o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td, lnd.mean.rate.prior )
 				gammatheta <- unname(o$omega)
 				if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
 				r <- Inf#unname(o$omega)
@@ -419,7 +450,7 @@ treedater = dater <- function(tre, sts, s=1e3
 				edge_lls <- 0
 				omegas <- rep( gammatheta, length(omegas))
 			} else{
-				o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td)
+				o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td, lnd.mean.rate.prior )
 				r <- o$r
 				ll <- o$ll
 				gammatheta <- o$gammatheta
