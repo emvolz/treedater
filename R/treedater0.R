@@ -97,7 +97,7 @@ require(mgcv)
 	list( r = r, gammatheta=gammatheta, ll = -o$value)
 }
 
-.optim.omega.poisson0 <- function(Ti, omega0, td, lnd.mean.rate.prior)
+.optim.omega.poisson0 <- function(Ti, omega0, td, lnd.mean.rate.prior, meanRateLimits)
 {	
 	blen <- .Ti2blen( Ti, td )
 	
@@ -105,7 +105,8 @@ require(mgcv)
 	{
 		-sum( dpois( pmax(0, round(td$tre$edge.length*td$s)), td$s * blen * omega ,  log = T) ) - unname(lnd.mean.rate.prior( omega ))
 	}
-	o <- optimise(  of, lower = omega0 / 10, upper = omega0 * 10)
+	o <- optimise(  of, lower = max( omega0 / 10, meanRateLimits[1] )
+	 , upper = min( omega0 * 10, meanRateLimits[2] ))
 	list( omega = unname( o$minimum), ll = -unname(o$objective) )
 }
 
@@ -443,7 +444,7 @@ treedater = dater <- function(tre, sts, s=1e3
 			}
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
-				o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td, lnd.mean.rate.prior )
+				o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td, lnd.mean.rate.prior , meanRateLimits)
 				gammatheta <- unname(o$omega)
 				if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
 				r <- Inf#unname(o$omega)
