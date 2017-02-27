@@ -46,7 +46,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 			}
 			strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
 			seqlen <- ifelse( is.null(overrideSeqLength) , td$s, overrideSeqLength )
-			td2 <- dater(tre, td$sts, s= seqlen
+			td2 <- tryCatch({dater(tre, td$sts, s= seqlen
 			 , omega0 = NA
 			 , minblen = td$minblen
 			 , quiet = TRUE
@@ -55,9 +55,9 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 			 , estimateSampleTimes = est
 			 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 			 , numStartConditions = td$numStartConditions 
-			)
+			 , meanRateLimits = td$meanRateLimits
+			)}, error =function(e) NA )
 			if (suppressWarnings( is.na( td2[1])) ) return (NA )
-			
 			if (!quiet){
 				cat('\n #############################\n')
 				cat( paste( '\n Replicate', k, 'complete \n' ))
@@ -78,6 +78,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 		tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %do% .parboot.replicate( k)#td, overrideSearchRoot, overrideClock , quiet )
 	}
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
+	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
 	# output rate CIs, parameter CIs, trees
 	meanRates <- sapply( tds, function(td) td$meanRate )
 	cvs <- sapply( tds, function(td) td$coef_of_variation )
@@ -206,7 +207,7 @@ boot.treedater <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 
 			clockstr <- overrideClock
 		}
 		strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
-		td2 <- dater(tre, td$sts, s= td$s
+		td2 <- tryCatch({ dater(tre, td$sts, s= td$s
 		 , omega0 = NA
 		 , minblen = td$minblen
 		 , quiet = TRUE
@@ -216,7 +217,8 @@ boot.treedater <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 
 		 , estimateSampleTimes = est
 		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 		 , numStartConditions = td$numStartConditions 
-		)
+		 , meanRateLimits = td$meanRateLimits
+		)}, error =function(e) NA )
 		if (suppressWarnings( is.na( td2[1])) ) return (NA )
 			
 		if (!quiet){
@@ -239,6 +241,7 @@ boot.treedater <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 
 		tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %do% .boot.replicate( )
 	}
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
+	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
 	# output rate CIs, parameter CIs, trees
 	meanRates <- sapply( tds, function(td) td$meanRate )
 	cvs <- sapply( tds, function(td) td$coef_of_variation )

@@ -296,6 +296,7 @@ treedater = dater <- function(tre, sts, s=1e3
 		#lnd.mean.rate.prior <- function(x) dunif( x , meanRateLimits[1], meanRateLimits[2], log= TRUE )
 		lnd.mean.rate.prior <- function(x) ifelse( x >= meanRateLimits[1] & x <= meanRateLimits[2], 0, -Inf )
 	}
+	
 	numStartConditions <- max(0, round( numStartConditions )) # number of omega0 to try for optimisation
 	
 	EST_SAMP_TIMES <- TRUE
@@ -530,7 +531,9 @@ treedater = dater <- function(tre, sts, s=1e3
 	rv$EST_SAMP_TIMES = EST_SAMP_TIMES
 	if (!EST_SAMP_TIMES) rv$estimateSampleTimes <- NULL
 	rv$estimateSampleTimes_densities <- estimateSampleTimes_densities
-	rv$numStartConditions = numStartConditions
+	rv$numStartConditions <- numStartConditions
+	rv$lnd.mean.rate.prior <- lnd.mean.rate.prior
+	rv$meanRateLimits <- meanRateLimits
 	
 	# add pvals for each edge
 	if (rv$clock=='relaxed'){
