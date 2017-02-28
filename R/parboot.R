@@ -91,6 +91,9 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 	} else {
 		timeOfMRCA_CI <- quantile( tmrcas, p = c(.025, .975 ))
 	}
+	if (td$timeOf < timeOfMRCA_CI[1] | td$timeOf > timeOfMRCA_CI[2] ){
+		warning( 'Parametric bootstrap CI does not cover the point estimate. Try non-parametric bootstrap *boot.treedater*. ')
+	}
 	rv <- list( 
 		trees = tds
 		, meanRates = meanRates
