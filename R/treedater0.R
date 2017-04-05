@@ -588,3 +588,76 @@ with( td,
 		abline( a = 0, b = 1 )
 	})
 }
+
+gibbs.treedater <- function(dtr, iter = 1e2, nsamp = 100 , report = 1) 
+{
+	# dtr : a treedater fit
+	n <- length( dtr$tip )
+	t <- c( dtr$sts[dtr$intree$tip.label] , dtr$Ti ) # current state
+	sampleOrderNodes <- sample( (n+1):(n + dtr$Nnode),  replace=F) # order of nodes to sample 
+	
+	td <- .make.tree.data (  dtr$intree, dtr$sts, dtr$s, cc = 10) 
+	td$minblen <- dtr$minblen #ugly 
+	
+	nodes <- 1:(n + dtr$Nnode)
+	node2edgei_list  <- lapply( nodes, function(x){
+		which( dtr$intree$edge[,2] == x )
+	})
+	
+	.sample.ti <- function(node )
+	{
+		# a sample/importance/resample algorithm with uniform proposal 
+		dgtrs <- td$daughters[node, ]
+		a <- td$parent[ node ]
+		if (any(is.na( c( dgtrs, a )))) return(NA)
+		b1 <- td$tre$edge.length[ node2edgei_list[[dgtrs[1]]] ]
+		b2 <- td$tre$edge.length[ node2edgei_list[[dgtrs[2]]] ]
+		b3 <- td$tre$edge.length[ node2edgei_list[[ node  ]] ]
+		
+		tub <- min( t[dgtrs ] )
+		tlb <- t[ a ]
+#~ if (tlb > tub ) browser() 
+		if ( tlb == tub ) return( NA ) 
+		
+		#tx <- seq( tlb, tub, l = 100 ) #TODO can probs do better than this 
+		tx <- runif( nsamp , tlb , tub )
+		
+		# vectorised: 
+		u1s <-  t[ dgtrs[1] ] - tx
+		u2s <-  t[ dgtrs[2] ] - tx
+		u3s <-  tx-t[a]
+		
+		p1s <- dtr$theta * u1s / ( 1 + dtr$theta * u1s )
+		p2s <- dtr$theta * u2s / ( 1 + dtr$theta * u2s )
+		p3s <- dtr$theta * u3s / ( 1 + dtr$theta * u3s )
+		
+		lls <- dnbinom( round( b1 * dtr$s ) , dtr$r, 1 - p1s , log = TRUE ) + 
+			dnbinom( round(b2 * dtr$s), dtr$r , 1 - p2s, log =T ) + 
+			dnbinom( round(b3 * dtr$s), dtr$r, 1 - p3s , log =T )
+		lls[is.na(lls)] <- -Inf
+		if (max(lls)==-Inf) return(NA)
+		w <- exp( lls - max( lls )  ) 
+		if (sum(w)==0) {
+			warning('All sample weights zero')
+			return( NA )
+		}
+		tx [ sample(1:length(tx), size = 1, prob= w )]
+	}
+	
+	for (i in 1:iter){
+		for ( node in sampleOrderNodes ){
+			ti <- .sample.ti( node )
+			if (!is.na( ti )) t[node] <- ti
+		}
+		
+		if ( i %% report  == 0 ){
+			print( paste( i, Sys.time() )  )
+		}
+	}
+	
+	# edit dater branch lengths & Ti 
+	Ti <- t[ (n+1):(n + dtr$Nnode ) ]
+	dtr$Ti <- Ti
+	dtr$edge.length <- .Ti2blen(Ti, td )
+	dtr
+}
