@@ -589,8 +589,9 @@ with( td,
 	})
 }
 
-gibbs.treedater <- function(dtr, iter = 1e2, nsamp = 100 , report = 1) 
+gibbs.treedater <- function(dtr, iter = 1e3, burn_pc = 20, returnTrees = 10, res = 100 , report = 1) 
 {
+#TODO version that modifies 1) tip dates 2) root height 
 	# dtr : a treedater fit
 	n <- length( dtr$tip )
 	t <- c( dtr$sts[dtr$intree$tip.label] , dtr$Ti ) # current state
@@ -616,11 +617,10 @@ gibbs.treedater <- function(dtr, iter = 1e2, nsamp = 100 , report = 1)
 		
 		tub <- min( t[dgtrs ] )
 		tlb <- t[ a ]
-#~ if (tlb > tub ) browser() 
 		if ( tlb == tub ) return( NA ) 
 		
 		#tx <- seq( tlb, tub, l = 100 ) #TODO can probs do better than this 
-		tx <- runif( nsamp , tlb , tub )
+		tx <- runif( res , tlb , tub )
 		
 		# vectorised: 
 		u1s <-  t[ dgtrs[1] ] - tx
@@ -644,20 +644,30 @@ gibbs.treedater <- function(dtr, iter = 1e2, nsamp = 100 , report = 1)
 		tx [ sample(1:length(tx), size = 1, prob= w )]
 	}
 	
+	X <- matrix( NA, nrow = length(t), ncol = iter)
 	for (i in 1:iter){
 		for ( node in sampleOrderNodes ){
 			ti <- .sample.ti( node )
 			if (!is.na( ti )) t[node] <- ti
 		}
+		X[, i] <- t
 		
 		if ( i %% report  == 0 ){
 			print( paste( i, Sys.time() )  )
 		}
 	}
 	
-	# edit dater branch lengths & Ti 
-	Ti <- t[ (n+1):(n + dtr$Nnode ) ]
-	dtr$Ti <- Ti
-	dtr$edge.length <- .Ti2blen(Ti, td )
-	dtr
+	# burn & sample t's 
+	ix <- round( seq( floor( burn_pc * iter/100), iter, l = returnTrees ) )
+	X <- X[ , ix ] 
+	
+	# return daters 
+	lapply( 1:ncol(X), function(i){
+		t <- X[, i ]
+		Ti <- t[ (n+1):(n + dtr$Nnode ) ]
+		dtr$Ti <- Ti
+		dtr$edge.length <- .Ti2blen(Ti, td )
+		dtr
+	})
+	
 }
