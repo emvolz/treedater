@@ -4,8 +4,8 @@
 `treedater` uses heuristic search to optimise the TMRCAs of a phylogeny and the substitution rate. 
 An uncorrelated relaxed molecular clock accounts for rate variation between lineages of the phylogeny which is parameterised using a Gamma-Poisson mixture model.
 
-To cite: A paper is submitted and in revision. Please cite
-* E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. In revision.
+To cite:
+* E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
 
 
 ## basic usage
