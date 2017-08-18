@@ -139,7 +139,6 @@ require(mgcv)
 		A <- omegas * td$A0 
 		B <- td$B0
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
-		
 		# initial feasible parameter values:
 		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
 		if (any(is.na(p0))){
@@ -305,7 +304,6 @@ treedater = dater <- function(tre, sts, s=1e3
 	if (is.null(estimateSampleTimes)) EST_SAMP_TIMES <- FALSE
 	.estimateSampleTimes_densities <- estimateSampleTimes_densities
 	if (EST_SAMP_TIMES){
-	# TODO midpoint for any missing dates
 		if (class(estimateSampleTimes)=='data.frame'){
 			if ( !('lower' %in% colnames(estimateSampleTimes)) | !('upper' %in% colnames(estimateSampleTimes) ) ){
 				stop(EST_SAMP_TIMES_ERR)
@@ -325,8 +323,28 @@ treedater = dater <- function(tre, sts, s=1e3
 		tiplabel_est_samp_times <- intersect( rownames(estimateSampleTimes), tre$tip.label)
 		iedge_tiplabel_est_samp_times <- match( tiplabel_est_samp_times, tre$tip.label[tre$edge[,2]] )
 	}
+		
+	# check for missing sample times, impute missing if needed 
+	#if (any(is.na(sts))) stop( 'Some sample times are NA.' )
+	stinfo_provided <- union( names(na.omit(sts)), rownames(estimateSampleTimes))
+	stinfo_not_provided <-   setdiff( tre$tip.label, stinfo_provided ) 
+	if (length( stinfo_not_provided ) > 0){
+		cat( 'NOTE: Neither sample times nor sample time bounds were provided for the following lineages:\n')
+		cat( stinfo_not_provided )
+		cat('\n Provide sampling info or remove these lineages from the tree. Stopping.\n ') 
+		stop('Missing sample time information.' )
+	}
+	initial_st_should_impute <- setdiff( rownames(estimateSampleTimes), names(na.omit(sts)))
+	if (length( initial_st_should_impute ) > 0){
+		cat('NOTE: initial guess of sample times for following lineages was not provided:\n')
+		cat ( initial_st_should_impute )
+		cat('\n') 
+		cat( 'Will proceed with midpoint of provided range as initial guess of these sample times.\n')
+		sts[initial_st_should_impute] <- rowMeans( estimateSampleTimes )[initial_st_should_impute] 
+	}
 	
 	if (is.null(names(sts))){
+		if (length(sts)!=length(tre$tip.label)) stop('Sample time vector length does not match number of lineages.')
 		names(sts) <- tre$tip.label
 	}
 	sts <- sts[tre$tip.label]
