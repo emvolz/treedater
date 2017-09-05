@@ -5,7 +5,7 @@
 An uncorrelated relaxed molecular clock accounts for rate variation between lineages of the phylogeny which is parameterised using a Gamma-Poisson mixture model.
 
 To cite:
-* E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
+* E.M. Volz and Frost, S.D.W. (2017) ![Scalable relaxed clock phylogenetic dating](https://doi.org/10.1093/ve/vex025). Virus Evolution.
 
 
 ## basic usage
