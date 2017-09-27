@@ -1,0 +1,54 @@
+#!/usr/bin/env Rscript
+# NOTE replace the preceding line with the correct path to Rscript or littler
+
+if (! ('treedater' %in% installed.packages()[,'Package'] ) ){
+	cat(' Please install treedater first. Quitting.\n')
+	q(status=1)
+}
+
+if (! ('getopt' %in% installed.packages()[,'Package'] ) ){
+	cat('tdcl depends on the getopt package. Will attempt to install.\n')
+	install.packages('getopt')
+}
+
+suppressPackageStartupMessages( require(getopt) )
+suppressPackageStartupMessages( require(treedater) )
+suppressPackageStartupMessages( require(ape) )
+
+spec <- matrix( c( 
+	'help', 'h', 2, 'logical', 
+	
+	'treefn', 't', 1, 'character', 
+	'samplefn', 's', 1, 'character', 
+	'sequenceLength', 'l', 1, 'numeric', 
+	
+	'output', 'o', 2, 'character'
+), byrow=TRUE, ncol = 4)
+opt = getopt(spec)
+
+HELP<- '-t <file> : file name of tree in newick format  \n
+-s  <file>should be a comma-separated-value file with sample times in format <taxon-id,sample-time> \n
+-l <length> :  the integer length of sequences in alignment used to construct the tree \n
+-o <file>: name of file for saving output  \n'
+
+if ( !is.null(opt$help) ) {
+  cat(getopt(spec, usage=TRUE))
+  cat (HELP)
+  q(status=1)
+}
+
+
+trefn <- opt$treefn 
+stsfn <- opt$samplefn
+sl <- opt$sequenceLength
+ofn <- opt$output
+
+tre <- read.tree( trefn )
+ststab <- read.csv( stsfn, header=FALSE )
+sts <- setNames( ststab[,2] , ststab[,1 ] )
+
+o <- dater( tre, sts, sl )
+
+summary(o) 
+
+write.tree( o, file=ofn )
