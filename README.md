@@ -27,7 +27,7 @@ You can also use treedater from the command line without starting R using the `t
 Usage: ./tdcl [-[-help|h] [<logical>]] [-[-treefn|t] <character>] [-[-samplefn|s] <character>] [-[-sequenceLength|l] <double>] [-[-output|o] [<character>]]
 
 -t <file> : file name of tree in newick format  
--s  <file>should be a comma-separated-value file with sample times in format <taxon-id,sample-time> and no header
+-s  <file> : should be a comma-separated-value file with sample times in format <taxon-id,sample-time> and no header
 -l <length> :  the integer length of sequences in alignment used to construct the tree 
 -o <file>: name of file for saving output 
 ```
