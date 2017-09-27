@@ -19,6 +19,19 @@ where
 * `sts` is a named vector of sample times for each tip in `tre`
 * `s` is the length of the genetic sequences used to estimate `tre`
 
+## command line
+
+You can also use treedater from the command line without starting R using the `tdcl` script: 
+```
+./tdcl -h
+Usage: ./tdcl [-[-help|h] [<logical>]] [-[-treefn|t] <character>] [-[-samplefn|s] <character>] [-[-sequenceLength|l] <double>] [-[-output|o] [<character>]]
+
+-t <file> : file name of tree in newick format  
+-s  <file>should be a comma-separated-value file with sample times in format <taxon-id,sample-time> and no header
+-l <length> :  the integer length of sequences in alignment used to construct the tree 
+-o <file>: name of file for saving output 
+```
+Note that you may need to modify the first line of the `tdcl` script with the correct path to `Rscript` or `littler`.
 
 # Demonstration with Influenza H3N2 HA 
 This data set comprises 177 HA sequences collected over 35 years worldwide with known date of sampling.
