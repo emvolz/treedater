@@ -12,7 +12,7 @@ dater(tre, sts, s = 1000, omega0 = NA, minblen = NA, maxit = 100, abstol = .001,
 
 \arguments{
   \item{tre}{
-An ape::phylo which describes the phylogeny with branches in units of substitutions per site. Ideally, the tree will be rooted, such as by using an outgroup. If the tree is not rooted, the root position will be estimated using root-to-tip regression. 
+An ape::phylo which describes the phylogeny with branches in units of substitutions per site. This may be a rooted or unrooted tree. If unrooted, the root position will be estimated by checking multiple candidates chosen by root-to-tip regression.  If the tree has multifurcations, these will be resolved and a binary tree will be returned.
 }
   \item{sts}{
 Vector of sample times for each tip in phylogenetic tree. Vector must be named with names corresponding to tre$tip.label. 
@@ -53,7 +53,7 @@ Maximum number of iterations.
 }
 
 \item{estimateSampleTimes}{
-	If some sample times are not known with certainty, bounds can be provided with this option. This should take the form of a data frame with columns 'lower' and 'upper' providing the sample time bounds for each uncertain tip. Row names of the data frame should correspond to elements in tip.label of the input tree. 
+	If some sample times are not known with certainty, bounds can be provided with this option. This should take the form of a data frame with columns 'lower' and 'upper' providing the sample time bounds for each uncertain tip. Row names of the data frame should correspond to elements in tip.label of the input tree. Tips with sample time bounds in this data frame do not need to appear in the *sts* argument, however if they are included in *sts*, that value will be used as a starting condition for optimisation. 
 }
 
 \item{estimateSampleTimes_densities}{
@@ -81,7 +81,7 @@ There are additional data elements:
 \item{clock} 'strict' or 'relaxed'
 }
 \references{
-Paper in preparation. Please cite github repository.
+E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
 }
 \author{
 Erik M Volz

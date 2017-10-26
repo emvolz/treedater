@@ -21,7 +21,7 @@
 Maintainer: \packageMaintainer{treedater}
 }
 \references{
-Paper in preparation.
+E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
 }
 \keyword{ package }
 \seealso{

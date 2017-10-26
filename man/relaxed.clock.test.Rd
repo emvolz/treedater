@@ -23,7 +23,7 @@ A dater object under either a strict or relaxed clock.
 }
 
 \references{
-Paper in preparation. Please cite github repository.
+E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
 }
 \author{
 Erik M Volz & Simon DW Frost
