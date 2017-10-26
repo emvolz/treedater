@@ -277,8 +277,17 @@ treedater = dater <- function(tre, sts, s=1e3
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
 	
+	if (!is.binary( tre ) ){
+		cat( 'Note: *dater* called with non binary tree. Will proceed after resolving polytomies.\n' )
+		if ( !is.rooted( tre )){
+			tre <- unroot( multi2di( tre ) ) 
+		} else{
+			tre <-  multi2di( tre ) 
+		}
+	}
+	
 	if (class(tre)[1]=='treedater'){
-		cat('Note: dater called with treedater input tree. Will use rooted tree with branch lengths in substitions\n')
+		cat('Note: *dater* called with treedater input tree. Will use rooted tree with branch lengths in substitions.\n')
 		tre <- tre$intree
 	}
 	
