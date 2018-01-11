@@ -10,7 +10,7 @@ parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, over
 		cat('NOTE: Running with overrideSearchRoot will speed up execution but may underestimate variance.\n')
 	}
 	if (overrideTempConstraint){
-		cat('NOTE: Running with overrideTempConstraint will speed up execution but may underestimate variance.\n')
+		cat('NOTE: Running with overrideTempConstraint will speed up execution but may underestimate variance. Bootstrap tree replicates may have negative branch lengths.\n')
 	}
 	level <- .95
 	alpha <- min(1, max(0, 1 - level ))
@@ -184,7 +184,7 @@ boot.treedater <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 
 		cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
 	}
 	if (overrideTempConstraint){
-		cat('NOTE: Running with overrideTempConstraint will speed up execution but may underestimate variance.\n')
+		cat('NOTE: Running with overrideTempConstraint will speed up execution but may underestimate variance. Bootstrap tree replicates may have negative branch lengths.\n')
 	}
 	if (length(tres) < nreps){
 		warning('Number of non-parametric bootstrap trees is less than number of bootstrap replicates requested. Results will under-estimate variance.')
