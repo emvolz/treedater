@@ -298,6 +298,8 @@ head(sts.df )
 ## KF790184_2012-10-05 2012.795 2012.877
 ## JX978746_2012-03-19 2012.247 2012.329
 ```
+In this case, we constructed the data frame with bounds for every sample in the tree, but we could also manually construct a data frame for a few selected samples where times of sampling are uncertain. 
+
 Now re-run treedater with the uncertain sample times. The vector `sts` provided here gives an initial guess of the unknown sample times. 
 
 ```r
