@@ -11,6 +11,41 @@ require(ape)
 require(limSolve)
 require(mgcv)
 
+labels.to.sampleYear <- function(tips, dateFormat='%Y-%m-%d'
+ #, units=c("years", "auto", "secs", "mins", "hours","days", "weeks")
+ #, origin = NULL
+ , delimiter='|'
+ , index=NULL
+ , regex=NULL
+)
+{
+	require(lubridate)
+	
+	units <- match.arg(units)
+	if (!is.null(delimiter) & !is.null(regex))
+	 stop('At most one of the options *delimiter* or *regex* should be supplied for determining times of sampled lineages.')
+	
+	if(!is.null(delimiter)){
+	  if(is.null(index)){
+		tipdates <- sapply( strsplit( tips, delimiter, fixed=TRUE) , function(x) tail(x,1) )
+	  } else {
+	    tipdates <- sapply( strsplit( tips, delimiter, fixed=TRUE) , function(x) x[index] )
+	  }
+	} else if( !is.null(regex)){
+		tipdates <- regmatches( tips, regexpr( regex, tips ))
+		if (length( tipdates)!= length(tips)) 
+		  stop('Error with regex: number of matches does not equal number of tips.')
+	}
+	
+	tipdates <- as.Date( tipdates, format=dateFormat )
+	if (is.null(origin)) origin <- min(tipdates)
+	stopifnot(inherits(origin, "Date"))
+	sts <- lubridate::decimal_date( tipdates )
+	setNames( sts, tips )
+}
+
+
+
 .make.tree.data <- function( tre, sampleTimes, s, cc)
 {
 	n <- length( tre$tip.label)
@@ -254,6 +289,7 @@ require(mgcv)
 	t[inodes]
 }
 
+#' Estimate a time-scaled tree and fit a molecular clock
 treedater = dater <- function(tre, sts, s=1e3
  , omega0 = NA
  , minblen = NA
@@ -601,14 +637,15 @@ print.treedater <- function(x, ...){
     invisible(x)
 }
 
-summary.treedater <- function(x) {
+summary.treedater <- function(x, ...) {
     stopifnot(inherits(x, "treedater"))
     print.treedater( x )
 }
 
-
-treedater.goodness.of.fit.plot <- function(td)
+#' Produce a goodness of fit plot
+goodnessOfFitPlot <- function(td)
 {
+	stopifnot(inherits(td, "treedater"))
 with( td, 
 	{
 		plot( 1:length(edge.p)/length(edge.p), sort (edge.p ) , type = 'l', xlab='Theoretical quantiles', ylab='Edge p value'); 
@@ -616,85 +653,85 @@ with( td,
 	})
 }
 
-gibbs.treedater <- function(dtr, iter = 1e3, burn_pc = 20, returnTrees = 10, res = 100 , report = 1) 
-{
-#TODO version that modifies 1) tip dates 2) root height 
-	# dtr : a treedater fit
-	n <- length( dtr$tip )
-	t <- c( dtr$sts[dtr$intree$tip.label] , dtr$Ti ) # current state
-	sampleOrderNodes <- sample( (n+1):(n + dtr$Nnode),  replace=F) # order of nodes to sample 
+#~ gibbs.treedater <- function(dtr, iter = 1e3, burn_pc = 20, returnTrees = 10, res = 100 , report = 1) 
+#~ {
+#~ #TODO version that modifies 1) tip dates 2) root height 
+#~ 	# dtr : a treedater fit
+#~ 	n <- length( dtr$tip )
+#~ 	t <- c( dtr$sts[dtr$intree$tip.label] , dtr$Ti ) # current state
+#~ 	sampleOrderNodes <- sample( (n+1):(n + dtr$Nnode),  replace=F) # order of nodes to sample 
 	
-	td <- .make.tree.data (  dtr$intree, dtr$sts, dtr$s, cc = 10) 
-	td$minblen <- dtr$minblen #ugly 
+#~ 	td <- .make.tree.data (  dtr$intree, dtr$sts, dtr$s, cc = 10) 
+#~ 	td$minblen <- dtr$minblen #ugly 
 	
-	nodes <- 1:(n + dtr$Nnode)
-	node2edgei_list  <- lapply( nodes, function(x){
-		which( dtr$intree$edge[,2] == x )
-	})
+#~ 	nodes <- 1:(n + dtr$Nnode)
+#~ 	node2edgei_list  <- lapply( nodes, function(x){
+#~ 		which( dtr$intree$edge[,2] == x )
+#~ 	})
 	
-	.sample.ti <- function(node )
-	{
-		# a sample/importance/resample algorithm with uniform proposal 
-		dgtrs <- td$daughters[node, ]
-		a <- td$parent[ node ]
-		if (any(is.na( c( dgtrs, a )))) return(NA)
-		b1 <- td$tre$edge.length[ node2edgei_list[[dgtrs[1]]] ]
-		b2 <- td$tre$edge.length[ node2edgei_list[[dgtrs[2]]] ]
-		b3 <- td$tre$edge.length[ node2edgei_list[[ node  ]] ]
+#~ 	.sample.ti <- function(node )
+#~ 	{
+#~ 		# a sample/importance/resample algorithm with uniform proposal 
+#~ 		dgtrs <- td$daughters[node, ]
+#~ 		a <- td$parent[ node ]
+#~ 		if (any(is.na( c( dgtrs, a )))) return(NA)
+#~ 		b1 <- td$tre$edge.length[ node2edgei_list[[dgtrs[1]]] ]
+#~ 		b2 <- td$tre$edge.length[ node2edgei_list[[dgtrs[2]]] ]
+#~ 		b3 <- td$tre$edge.length[ node2edgei_list[[ node  ]] ]
 		
-		tub <- min( t[dgtrs ] )
-		tlb <- t[ a ]
-		if ( tlb == tub ) return( NA ) 
+#~ 		tub <- min( t[dgtrs ] )
+#~ 		tlb <- t[ a ]
+#~ 		if ( tlb == tub ) return( NA ) 
 		
-		#tx <- seq( tlb, tub, l = 100 ) #TODO can probs do better than this 
-		tx <- runif( res , tlb , tub )
+#~ 		#tx <- seq( tlb, tub, l = 100 ) #TODO can probs do better than this 
+#~ 		tx <- runif( res , tlb , tub )
 		
-		# vectorised: 
-		u1s <-  t[ dgtrs[1] ] - tx
-		u2s <-  t[ dgtrs[2] ] - tx
-		u3s <-  tx-t[a]
+#~ 		# vectorised: 
+#~ 		u1s <-  t[ dgtrs[1] ] - tx
+#~ 		u2s <-  t[ dgtrs[2] ] - tx
+#~ 		u3s <-  tx-t[a]
 		
-		p1s <- dtr$theta * u1s / ( 1 + dtr$theta * u1s )
-		p2s <- dtr$theta * u2s / ( 1 + dtr$theta * u2s )
-		p3s <- dtr$theta * u3s / ( 1 + dtr$theta * u3s )
+#~ 		p1s <- dtr$theta * u1s / ( 1 + dtr$theta * u1s )
+#~ 		p2s <- dtr$theta * u2s / ( 1 + dtr$theta * u2s )
+#~ 		p3s <- dtr$theta * u3s / ( 1 + dtr$theta * u3s )
 		
-		lls <- dnbinom( round( b1 * dtr$s ) , dtr$r, 1 - p1s , log = TRUE ) + 
-			dnbinom( round(b2 * dtr$s), dtr$r , 1 - p2s, log =T ) + 
-			dnbinom( round(b3 * dtr$s), dtr$r, 1 - p3s , log =T )
-		lls[is.na(lls)] <- -Inf
-		if (max(lls)==-Inf) return(NA)
-		w <- exp( lls - max( lls )  ) 
-		if (sum(w)==0) {
-			warning('All sample weights zero')
-			return( NA )
-		}
-		tx [ sample(1:length(tx), size = 1, prob= w )]
-	}
+#~ 		lls <- dnbinom( round( b1 * dtr$s ) , dtr$r, 1 - p1s , log = TRUE ) + 
+#~ 			dnbinom( round(b2 * dtr$s), dtr$r , 1 - p2s, log =T ) + 
+#~ 			dnbinom( round(b3 * dtr$s), dtr$r, 1 - p3s , log =T )
+#~ 		lls[is.na(lls)] <- -Inf
+#~ 		if (max(lls)==-Inf) return(NA)
+#~ 		w <- exp( lls - max( lls )  ) 
+#~ 		if (sum(w)==0) {
+#~ 			warning('All sample weights zero')
+#~ 			return( NA )
+#~ 		}
+#~ 		tx [ sample(1:length(tx), size = 1, prob= w )]
+#~ 	}
 	
-	X <- matrix( NA, nrow = length(t), ncol = iter)
-	for (i in 1:iter){
-		for ( node in sampleOrderNodes ){
-			ti <- .sample.ti( node )
-			if (!is.na( ti )) t[node] <- ti
-		}
-		X[, i] <- t
+#~ 	X <- matrix( NA, nrow = length(t), ncol = iter)
+#~ 	for (i in 1:iter){
+#~ 		for ( node in sampleOrderNodes ){
+#~ 			ti <- .sample.ti( node )
+#~ 			if (!is.na( ti )) t[node] <- ti
+#~ 		}
+#~ 		X[, i] <- t
 		
-		if ( i %% report  == 0 ){
-			print( paste( i, Sys.time() )  )
-		}
-	}
+#~ 		if ( i %% report  == 0 ){
+#~ 			print( paste( i, Sys.time() )  )
+#~ 		}
+#~ 	}
 	
-	# burn & sample t's 
-	ix <- round( seq( floor( burn_pc * iter/100), iter, l = returnTrees ) )
-	X <- X[ , ix ] 
+#~ 	# burn & sample t's 
+#~ 	ix <- round( seq( floor( burn_pc * iter/100), iter, l = returnTrees ) )
+#~ 	X <- X[ , ix ] 
 	
-	# return daters 
-	lapply( 1:ncol(X), function(i){
-		t <- X[, i ]
-		Ti <- t[ (n+1):(n + dtr$Nnode ) ]
-		dtr$Ti <- Ti
-		dtr$edge.length <- .Ti2blen(Ti, td )
-		dtr
-	})
+#~ 	# return daters 
+#~ 	lapply( 1:ncol(X), function(i){
+#~ 		t <- X[, i ]
+#~ 		Ti <- t[ (n+1):(n + dtr$Nnode ) ]
+#~ 		dtr$Ti <- Ti
+#~ 		dtr$edge.length <- .Ti2blen(Ti, td )
+#~ 		dtr
+#~ 	})
 	
-}
+#~ }

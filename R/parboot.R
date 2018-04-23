@@ -1,7 +1,7 @@
 require(foreach)
 
 
-parboot.treedater <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=F, ncpu = 1, parallel_foreach = FALSE )
+parboot <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=F, ncpu = 1, parallel_foreach = FALSE )
 {
 	if (quiet){
 	cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
