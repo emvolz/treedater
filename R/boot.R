@@ -40,6 +40,7 @@ require(foreach)
 #'
 #' @seealso
 #' dater
+#' boot
 #'
 #' @author Erik M Volz <erik.volz@gmail.com>
 parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=F, parallel_foreach = FALSE )
@@ -147,14 +148,51 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, over
 		, tmrcas = tmrcas
 		, ttmrcas = ttmrcas
 	)
-	class(rv) <- 'boot.treedater'
+	class(rv) <- 'bootTreedater'
 	rv
 }
 
 
-##
-boot <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 , overrideClock=NULL, nreps = 100, quiet=TRUE, normalApproxTMRCA=F, ncpu = 1, parallel_foreach = FALSE )
+#' Estimate of confidence intervals of molecular clock parameters with user-supplied set of bootstrap trees
+#'
+#'      If the original treedater fit estimated the root position, root
+#'      position will also be estimated for each simulation, so the
+#'      returned trees may have different root positions. Some replicates
+#'      may converge to a strict clock or a relaxed clock, so the
+#'      parameter estimates in each replicate may not be directly
+#'      comparable. It is possible to compute confidence intervals for the
+#'      times of particular nodes or for estimated sample times by
+#'      inspecting the output from each fitted treedater object, which is
+#'      contained in the $trees attribute.
+#'
+#' @param td A fitted treedater object 
+#' @param tres a list or multiPhylo with bootstrap trees with branches in evolutionary distance 
+#' @param ncpu Number of threads to use for parallel computation. Recommended.
+#' @param searchRoot See *dater*
+#' @param overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution. 
+#' @param overrideClock May be 'strict' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td
+#' @param quiet If TRUE will minimize output printed to screen
+#' @param normalApproxTMRCA If TRUE will use estimate standard deviation from simulation replicates and report confidence interval based on normal distribution
+#' @param parallel_foreach If TRUE will use the foreach package for parallelization. May work better on HPC systems. 
+#'
+#' @return 
+#' A list with elements 
+#' \itemize{
+#' \item trees: The fitted treedater objects corresponding to each simulation
+#' \item meanRates: Vector of estimated rates for each simulation
+#' \item meanRate_CI: Confidence interval for substitution rate
+#' \item coef_of_variation_CI: Confidence interval for rate variation
+#' \item timeOfMRCA_CI: Confidence interval for time of common ancestor
+#' }
+#'
+#' @seealso
+#' dater
+#' parboot
+#'
+#' @author Erik M Volz <erik.volz@gmail.com>
+boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=F, parallel_foreach = FALSE )
 {
+	nreps <- length(tres )
 	if (quiet){
 		cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
 	}
@@ -244,12 +282,39 @@ boot <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 , override
 		, tmrcas = tmrcas
 		, ttmrcas = ttmrcas
 	)
-	class(rv) <- 'boot.treedater'
+	class(rv) <- 'bootTreedater'
 	rv
 }
 
-##
 
+#'Use parametric bootstrap to test if relaxed clock offers improved fit to data.
+#'
+#'      This function simulates phylogenies with branch lengths in units
+#'      of substitutions per site. Simulations are based on a fitted
+#'      treedater object which provides parameters of the molecular clock
+#'      model. The coefficient of variation of rates is estimated using a
+#'      relaxed clock model applied to strict clock simulations. Estimates
+#'      of the CV is then compared to the null distribution provided by
+#'      simulations.
+#'
+#'      This function will print the optimal clock model
+#'      and the distribution of the coefficient of variation statistic under the null hypothesis (strict
+#'      clock). Parameters passed to this function should be the same as when calling *dater*.
+#' 
+#' @param ... arguments passed to *dater*
+#' @param nreps Integer number of simulations
+#' @param overrideTempConstraint see *parboot*
+#' 
+#' @return  A list with elements:
+#' \itemize{
+#' \item strict_treedater: A dater object under a strict clock
+#' \item relaxed_treedater: A dater object under a relaxed clock
+#' \item clock: The favoured clock model 
+#' \item parboot: Result of call to *parboot* using fitted treedater and forcing a relaxed clock
+#' \item nullHypothesis_coef_of_variation_CI: The null hypothesis CV
+#' }
+#'
+#' @author Erik M Volz <erik.volz@gmail.com>
 relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T )
 {
 	argnames <- names(list(...))
@@ -270,26 +335,27 @@ relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T )
 	list( strict_treedater = td
 	 , relaxed_treedater = tdrc 
 	 , clock = clock
-	 , parboot_strict = pbtd
+	 , parboot = pbtd
 	 , nullHypothesis_coef_of_variation_CI = cvci_null
 	)
 }
 
 ##
 
-print.boot.treedater = print.boot.treedater <- function( x, ... )
+print.bootTreedater = print.boot.treedater <- function( x, ... )
 {
-rns <- c( 'Time of common ancestor' 
-  , 'Mean substitution rate'
-)
-cns <- c( 'pseudo ML'
- , paste( round(100*x$alpha/2, digits=3), '%')
- , paste( round(100*(1-x$alpha/2), digits=3), '%')
-)
-o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$meanRate)
- , c( x$timeOfMRCA_CI[1], x$meanRate_CI[1])  
- , c( x$timeOfMRCA_CI[2], x$meanRate_CI[2] )  
-)
+	stopifnot(inherits(x, "bootTreedater"))
+	rns <- c( 'Time of common ancestor' 
+	  , 'Mean substitution rate'
+	)
+	cns <- c( 'pseudo ML'
+	 , paste( round(100*x$alpha/2, digits=3), '%')
+	 , paste( round(100*(1-x$alpha/2), digits=3), '%')
+	)
+	o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$meanRate)
+	 , c( x$timeOfMRCA_CI[1], x$meanRate_CI[1])  
+	 , c( x$timeOfMRCA_CI[2], x$meanRate_CI[2] )  
+	)
 	rownames(o) <- rns
 	colnames(o) <- cns
 	print(o)
@@ -297,8 +363,9 @@ o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$meanRate)
 	invisible(x)
 }
 
-plot.boot.ltt = plot.boot.ltt <- function(pbtd, t0 = NA, res = 100, ... )
+plot.bootTreedater <- function(pbtd, t0 = NA, res = 100,  ... )
 {
+	stopifnot(inherits(x, "bootTreedater"))
 	t1 <- max( pbtd$td$sts, na.rm=T )
 	if (is.na(t0)) t0 <- min( sapply( pbtd$trees, function(tr) tr$timeOf ) )
 	times <- seq( t0, t1, l = res )
@@ -309,9 +376,16 @@ plot.boot.ltt = plot.boot.ltt <- function(pbtd, t0 = NA, res = 100, ... )
 			), c('lb', 'median', 'ub') )
 		)
 	}))) -> ltt
-
-	pl.df <- as.data.frame( ltt )
-	p <- ggplot( pl.df ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
-	p <- p + geom_path( aes(x = times, y = pml ))
-	(p <- p + ylab( 'Lineages through time') + xlab('Time')  )
+	
+	if (ggplot){
+		pl.df <- as.data.frame( ltt )
+		p <- ggplot( pl.df ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
+		p <- p + geom_path( aes(x = times, y = pml ))
+		return (p <- p + ylab( 'Lineages through time') + xlab('Time')  )
+	}
+	with( pl.df ,{
+		plot( times, lb, type = 'l', lty = 3, lwd = .5, xlab = 'Time', ylab= 'Lineages through time', main=''  )
+		lines( times, ub, lty = 3, lwd = .5)
+		lines( times, pml, lwd = 2) 
+	})
 }
