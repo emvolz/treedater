@@ -1,7 +1,48 @@
 require(foreach)
 
-
-parboot <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=F, ncpu = 1, parallel_foreach = FALSE )
+#' Estimate of confidence intervals using parametric bootstrap for molecular clock dating.
+#'
+#'     This function simulates phylogenies with branch lengths in units
+#'      of substitutions per site. Simulations are based on a fitted
+#'      treedater object which provides parameters of the molecular clock
+#'      model. The treedater method is applied to each simulated tree
+#'      providing a Monte Carlo estimate of variance in rates and dates.
+#'
+#'      If the original treedater fit estimated the root position, root
+#'      position will also be estimated for each simulation, so the
+#'      returned trees may have different root positions. Some replicates
+#'      may converge to a strict clock or a relaxed clock, so the
+#'      parameter estimates in each replicate may not be directly
+#'      comparable. It is possible to compute confidence intervals for the
+#'      times of particular nodes or for estimated sample times by
+#'      inspecting the output from each fitted treedater object, which is
+#'      contained in the $trees attribute.
+#'
+#' @param td A fitted treedater object 
+#' @param nreps Integer number of simulations to be carried out 
+#' @param ncpu Number of threads to use for parallel computation. Recommended.
+#' @param  overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution. 
+#' @param overrideClock May be 'strict' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td
+#' @param overrideSeqLength Optional sequence length to use in simulations
+#' @param quiet If TRUE will minimize output printed to screen
+#' @param normalApproxTMRCA If TRUE will use estimate standard deviation from simulation replicates and report confidence interval based on normal distribution
+#' @param parallel_foreach If TRUE will use the foreach package for parallelization. May work better on HPC systems. 
+#'
+#' @return 
+#' A list with elements 
+#' \itemize{
+#' \item trees: The fitted treedater objects corresponding to each simulation
+#' \item meanRates: Vector of estimated rates for each simulation
+#' \item meanRate_CI: Confidence interval for substitution rate
+#' \item coef_of_variation_CI: Confidence interval for rate variation
+#' \item timeOfMRCA_CI: Confidence interval for time of common ancestor
+#' }
+#'
+#' @seealso
+#' dater
+#'
+#' @author Erik M Volz <erik.volz@gmail.com>
+parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=F, parallel_foreach = FALSE )
 {
 	if (quiet){
 	cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
@@ -38,7 +79,7 @@ parboot <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=
 			if ( overrideTempConstraint) tempConstraint <- FALSE
 			clockstr <- td$clock
 			if (!is.null( overrideClock)){
-				if (is.na(overrideClock)) stop('overrideClock NA. Quitting.')
+				if (is.na(overrideClock)) stop('overrideClock NA. Stopping.')
 				if (!overrideClock %in% c('strict', 'relaxed') ){
 					stop('overrideClock must be one of strict or relaxed')
 				}
@@ -110,75 +151,9 @@ parboot <- function( td , nreps = 100,  overrideTempConstraint=T, overrideClock=
 	rv
 }
 
-print.parboot.treedater = print.boot.treedater <- function( x, ... )
-{
-rns <- c( 'Time of common ancestor' 
-  , 'Mean substitution rate'
-)
-cns <- c( 'pseudo ML'
- , paste( round(100*x$alpha/2, digits=3), '%')
- , paste( round(100*(1-x$alpha/2), digits=3), '%')
-)
-o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$meanRate)
- , c( x$timeOfMRCA_CI[1], x$meanRate_CI[1])  
- , c( x$timeOfMRCA_CI[2], x$meanRate_CI[2] )  
-)
-	rownames(o) <- rns
-	colnames(o) <- cns
-	print(o)
-	cat( '\n For more detailed output, $trees provides a list of each fit to each simulation \n')
-	invisible(x)
-}
-
-plot.parboot.ltt = plot.boot.ltt <- function(pbtd, t0 = NA, res = 100, ... )
-{
-	t1 <- max( pbtd$td$sts, na.rm=T )
-	if (is.na(t0)) t0 <- min( sapply( pbtd$trees, function(tr) tr$timeOf ) )
-	times <- seq( t0, t1, l = res )
-	cbind( times = times , t( sapply( times, function(t){
-		c( pml = sum(pbtd$td$sts > t ) - sum( pbtd$td$Ti>t ) 
-			, setNames(quantile( sapply( pbtd$trees, function(tre ) sum( tre$sts > t) - sum( tre$Ti > t ) )
-			 , probs = c( .025, .5, .975 ) 
-			), c('lb', 'median', 'ub') )
-		)
-	}))) -> ltt
-
-	pl.df <- as.data.frame( ltt )
-	p <- ggplot( pl.df ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
-	p <- p + geom_path( aes(x = times, y = pml ))
-	(p <- p + ylab( 'Lineages through time') + xlab('Time')  )
-}
-
-
-
-relaxed.clock.test <- function( ..., nreps=100, overrideTempConstraint=T )
-{
-	argnames <- names(list(...))
-	if ( 'strictClock'  %in% argnames) stop('Can not prespecify clock type *strictClock* for relaxed.clock.test. Quitting.')
-	td <- dater(..., strict=TRUE)
-	pbtd <-  parboot.treedater( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
-	 , overrideClock = 'relaxed' )
-	cvci_null <- pbtd$coef_of_variation_CI
-	
-	tdrc <- dater(..., strict=FALSE)
-	clock <- 'strict'
-	if ( tdrc$coef_of_variation > cvci_null[2] ){
-		clock <- 'relaxed'
-	}
-	cat( paste( 'Best clock model: ', clock, '\n'))
-	cat( paste( 'Null distribution of rate coefficient of variation:', paste(cvci_null, collapse=' '), '\n'))
-	cat('Returning best treedater fit\n')
-	list( strict_treedater = td
-	 , relaxed_treedater = tdrc 
-	 , clock = clock
-	 , parboot_strict = pbtd
-	 , nullHypothesis_coef_of_variation_CI = cvci_null
-	)
-}
-
 
 ##
-boot.treedater <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 , overrideClock=NULL, nreps = 100, quiet=TRUE, normalApproxTMRCA=F, ncpu = 1, parallel_foreach = FALSE )
+boot <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 , overrideClock=NULL, nreps = 100, quiet=TRUE, normalApproxTMRCA=F, ncpu = 1, parallel_foreach = FALSE )
 {
 	if (quiet){
 		cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
@@ -192,9 +167,9 @@ boot.treedater <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 
 	level <- .95
 	alpha <- min(1, max(0, 1 - level ))
 
-	.boot.replicate <- function(  )
+	.boot.replicate <- function( k = NULL )
 	{
-		k <- sample.int( length(tres), size=1)
+		if (is.null(k)) k <- sample.int( length(tres), size=1)
 		tre <- tres[[k]]
 		
 		est <- NULL
@@ -235,9 +210,9 @@ boot.treedater <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 
 	if (ncpu > 1)
 	{
 		if (parallel_foreach){
-			tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% .boot.replicate()
+			tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% .boot.replicate(k)
 		} else{
-			tds <- parallel::mclapply( 1:nreps, function(k) .boot.replicate() 
+			tds <- parallel::mclapply( 1:nreps, function(k) .boot.replicate(k) 
 			, mc.cores = ncpu ) 
 		}
 	} else{
@@ -271,4 +246,72 @@ boot.treedater <- function( td, tres, overrideTempConstraint=TRUE, searchRoot=1 
 	)
 	class(rv) <- 'boot.treedater'
 	rv
+}
+
+##
+
+relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T )
+{
+	argnames <- names(list(...))
+	if ( 'strictClock'  %in% argnames) stop('Can not prespecify clock type *strictClock* for relaxed.clock.test. Quitting.')
+	td <- dater(..., strict=TRUE)
+	pbtd <-  parboot.treedater( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
+	 , overrideClock = 'relaxed' )
+	cvci_null <- pbtd$coef_of_variation_CI
+	
+	tdrc <- dater(..., strict=FALSE)
+	clock <- 'strict'
+	if ( tdrc$coef_of_variation > cvci_null[2] ){
+		clock <- 'relaxed'
+	}
+	cat( paste( 'Best clock model: ', clock, '\n'))
+	cat( paste( 'Null distribution of rate coefficient of variation:', paste(cvci_null, collapse=' '), '\n'))
+	cat('Returning best treedater fit\n')
+	list( strict_treedater = td
+	 , relaxed_treedater = tdrc 
+	 , clock = clock
+	 , parboot_strict = pbtd
+	 , nullHypothesis_coef_of_variation_CI = cvci_null
+	)
+}
+
+##
+
+print.boot.treedater = print.boot.treedater <- function( x, ... )
+{
+rns <- c( 'Time of common ancestor' 
+  , 'Mean substitution rate'
+)
+cns <- c( 'pseudo ML'
+ , paste( round(100*x$alpha/2, digits=3), '%')
+ , paste( round(100*(1-x$alpha/2), digits=3), '%')
+)
+o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$meanRate)
+ , c( x$timeOfMRCA_CI[1], x$meanRate_CI[1])  
+ , c( x$timeOfMRCA_CI[2], x$meanRate_CI[2] )  
+)
+	rownames(o) <- rns
+	colnames(o) <- cns
+	print(o)
+	cat( '\n For more detailed output, $trees provides a list of each fit to each simulation \n')
+	invisible(x)
+}
+
+plot.boot.ltt = plot.boot.ltt <- function(pbtd, t0 = NA, res = 100, ... )
+{
+	t1 <- max( pbtd$td$sts, na.rm=T )
+	if (is.na(t0)) t0 <- min( sapply( pbtd$trees, function(tr) tr$timeOf ) )
+	times <- seq( t0, t1, l = res )
+	cbind( times = times , t( sapply( times, function(t){
+		c( pml = sum(pbtd$td$sts > t ) - sum( pbtd$td$Ti>t ) 
+			, setNames(quantile( sapply( pbtd$trees, function(tre ) sum( tre$sts > t) - sum( tre$Ti > t ) )
+			 , probs = c( .025, .5, .975 ) 
+			), c('lb', 'median', 'ub') )
+		)
+	}))) -> ltt
+
+	pl.df <- as.data.frame( ltt )
+	p <- ggplot( pl.df ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
+	p <- p + geom_path( aes(x = times, y = pml ))
+	(p <- p + ylab( 'Lineages through time') + xlab('Time')  )
 }

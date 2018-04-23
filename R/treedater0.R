@@ -11,19 +11,30 @@ require(ape)
 require(limSolve)
 require(mgcv)
 
-labels.to.sampleYear <- function(tips, dateFormat='%Y-%m-%d'
- #, units=c("years", "auto", "secs", "mins", "hours","days", "weeks")
- #, origin = NULL
- , delimiter='|'
+#' Compute a vector of numeric sample times from labels in a sequence aligment or phylogeny
+#' 
+#' @param tips A character vector supplying the name of each sample 
+#' @param dateFormat The format of the sample date. See ?Date for more information
+#' @param delimiter Character(s) which separate data in each label
+#' @param index Integer position of the date string in each label with respect to *delimiter*
+#' @param regex A regular expression for finding the date substring. Should not be used with *delimiter* or *index*
+#' @return Numeric vector with sample time in decimal format. 
+#' @examples 
+#' ## A couple of labels for Ebola virus sequences: 
+#' sampleYearsFromLabels( c('EBOV|AA000000|EM104|SierraLeone_EM|2014-06-02', 'EBOV|AA000000|G3713|SierraLeone_G|2014-06-09'), delimiter='|' )
+#' ## Equivalently: 
+#' sampleYearsFromLabels( c('EBOV|AA000000|EM104|SierraLeone_EM|2014-06-02', 'EBOV|AA000000|G3713|SierraLeone_G|2014-06-09'), regex='[0-9]+-[0-9]+-[0-9]+')
+sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
+ , delimiter=NULL #'|'
  , index=NULL
  , regex=NULL
 )
 {
 	require(lubridate)
 	
-	units <- match.arg(units)
+	#units <- match.arg(units)
 	if (!is.null(delimiter) & !is.null(regex))
-	 stop('At most one of the options *delimiter* or *regex* should be supplied for determining times of sampled lineages.')
+	 stop('At most one of the options *delimiter* or *regex* should be supplied for determining times of sampled lineages. The *index* parameter may be supplied with delimiter, or if omitted, will assume that the last field in the tip label corresponds to date.')
 	
 	if(!is.null(delimiter)){
 	  if(is.null(index)){
@@ -38,13 +49,11 @@ labels.to.sampleYear <- function(tips, dateFormat='%Y-%m-%d'
 	}
 	
 	tipdates <- as.Date( tipdates, format=dateFormat )
-	if (is.null(origin)) origin <- min(tipdates)
-	stopifnot(inherits(origin, "Date"))
+	#if (is.null(origin)) origin <- min(tipdates)
+	#stopifnot(inherits(origin, "Date"))
 	sts <- lubridate::decimal_date( tipdates )
 	setNames( sts, tips )
 }
-
-
 
 .make.tree.data <- function( tre, sampleTimes, s, cc)
 {
@@ -223,8 +232,8 @@ labels.to.sampleYear <- function(tips, dateFormat='%Y-%m-%d'
 		o <- pcls(M)
 	o
 }
-
 #</ constrained ls>
+
 .optim.omegas.gammaPoisson1 <- function( Ti, r, gammatheta, td )
 {
 	blen <- .Ti2blen( Ti, td )
@@ -290,6 +299,85 @@ labels.to.sampleYear <- function(tips, dateFormat='%Y-%m-%d'
 }
 
 #' Estimate a time-scaled tree and fit a molecular clock
+#'
+#' @details 
+#' Estimates the calendar time of nodes in the given phylogenetic
+#' tree with branches in units of substitutions per site. The
+#' calendar time of each sample must also be specified and the length
+#' of the sequences used to estimate the tree. If the tree is not
+#' rooted, this function will estimate the root position.
+#' 
+#' @section References:
+#' E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
+#' 
+#' @param tre An ape::phylo which describes the phylogeny with branches in
+#'        units of substitutions per site. This may be a rooted or
+#'        unrooted tree. If unrooted, the root position will be
+#'        estimated by checking multiple candidates chosen by
+#'        root-to-tip regression.  If the tree has multifurcations,
+#'        these will be resolved and a binary tree will be returned.
+#' @param sts Vector of sample times for each tip in phylogenetic tree.
+#'        Vector must be named with names corresponding to
+#'        tre$tip.label.
+#' @param s Sequence length (numeric). This should correspond to sequence length used in phylogenetic analysis and will not necessarily be the same as genome length. 
+#' @param omega0 Initial guess of the mean substitution rate (substitutions
+#'        per site per unit time). If not provided, will guess using
+#'        root to tip regression.
+#' @param minblen Minimum branch length in calendar time. By default, this will
+#'        be the range of sample times (max - min) divided by sample
+#'        size.
+#' @param maxit Maximum number of iterations 
+#' @param abstol Difference in log likelihood between successive iterations for convergence.
+#' @param searchRoot Will search for the optimal root position using the top
+#'        matches from root-to-tip regression.  If searchRoot=x, dates
+#'        will be estimated for x trees, and the estimate with the
+#'        highest likelihood will be returned.
+#' @param quiet If TRUE, will suppress messages during execution 
+#' @param temporalConstraints  If TRUE, will enforce the condition that an
+#'        ancestor node in the phylogeny occurs before all progeny.
+#'        Equivalently, this will preclude negative branch lengths.
+#'        Note that execution is faster if this option is FALSE.
+#' @param strictClock If TRUE, will fit a Poisson evolutionary model without
+#'        rate variation.
+#' @param estimateSampleTimes If some sample times are not known with certainty,
+#'         bounds can be provided with this option. This should take the
+#'         form of a data frame with columns 'lower' and 'upper'
+#'         providing the sample time bounds for each uncertain tip. Row
+#'         names of the data frame should correspond to elements in
+#'         tip.label of the input tree. Tips with sample time bounds in
+#'         this data frame do not need to appear in the *sts* argument,
+#'         however if they are included in *sts*, that value will be
+#'         used as a starting condition for optimisation.
+#' @param estimateSampleTimes_densities: An optional named list of log densities
+#'           which would be used as priors for unknown sample times. Names
+#'           should correspond to elements in tip.label with uncertain
+#'           sample times.
+#' @param numStartConditions Will attempt optimisation from more than one starting point if >0
+#' @param clsSolver Which package should be used for constrained least-squares? Options are _mgcv_ or _limSolve_
+#' @param meanRateLimits Optional constraints for the mean substitution rate 
+#' @param ncpu Number of threads for parallel computing 
+#' @param parallel_foreach If TRUE, will use the _foreach_ package instead of the _parallel_ package. This may work better on some HPC systems. 
+#' 
+#' @return A time-scaled tree and estimated molecular clock rate 
+#' 
+#' @author Erik M Volz <erik.volz@gmail.com>
+#' 
+#' @seealso 
+#' ape::chronos
+#' ape::estimate.mu
+#'
+#' @examples
+#' \dontrun{
+#' 	## simulate a random tree and sample times for demonstration
+#'      # make a random tree
+#'      tre <- rtree(50)
+#'      # sample times based on distance from root to tip
+#'      sts <- setNames(  dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)], tre$tip.label)
+#'      # modify edge length to represent evolutionary distance with rate 1e-3
+#'      tre$edge.length <- tre$edge.length * 1e-3
+#'      # treedater: 
+#'      td <- dater( tre, sts =sts )
+#' }
 treedater = dater <- function(tre, sts, s=1e3
  , omega0 = NA
  , minblen = NA
@@ -308,7 +396,7 @@ treedater = dater <- function(tre, sts, s=1e3
  , parallel_foreach = FALSE
 )
 { 
-	clsSolver <- clsSolver[1]
+	clsSolver <- match.arg( 'clsSolver') #clsSolver[1]
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
@@ -442,7 +530,7 @@ treedater = dater <- function(tre, sts, s=1e3
 		if (!quiet) cat( 'Tree is rooted. Not estimating root position.\n')
 	}
 	if (is.na(minblen)){
-		minblen <- diff(range(sts))/10/ length(sts) #TODO choice of this parm is difficult, may require sep optim / crossval
+		minblen <- diff(range(sts))/ length(sts) #TODO choice of this parm is difficult, may require sep optim / crossval
 		cat(paste0('Note: Minimum temporal branch length set to ', minblen, '. Increase this value in the event of convergence failures. \n'))
 	}
 	if (!is.na(omega0) & numStartConditions > 0 ){
@@ -643,6 +731,10 @@ summary.treedater <- function(x, ...) {
 }
 
 #' Produce a goodness of fit plot
+#'
+#' The sorted tail probabilties (p values) for each edge in the tree under the fitted model
+#'
+#' @param td A treedater object generated by the \code{dater} function
 goodnessOfFitPlot <- function(td)
 {
 	stopifnot(inherits(td, "treedater"))
