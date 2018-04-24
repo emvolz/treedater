@@ -1,5 +1,3 @@
-require(foreach)
-
 #' Estimate of confidence intervals using parametric bootstrap for molecular clock dating.
 #'
 #'     This function simulates phylogenies with branch lengths in units
@@ -43,6 +41,8 @@ require(foreach)
 #' boot
 #'
 #' @author Erik M Volz <erik.volz@gmail.com>
+#'
+#' @export 
 parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=F, parallel_foreach = FALSE )
 {
 	if (quiet){
@@ -111,13 +111,14 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, over
 	if (ncpu > 1)
 	{
 		if (parallel_foreach){
+			require(foreach)
 			tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% .parboot.replicate(k)
 		} else{
 			tds <- parallel::mclapply( 1:nreps, function(k) .parboot.replicate(k) 
 			, mc.cores = ncpu ) 
 		}
 	} else{
-		tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %do% .parboot.replicate( k)#td, overrideSearchRoot, overrideClock , quiet )
+		tds <- lapply( 1:nreps, function(k) .parboot.replicate( k) )
 	}
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
@@ -166,7 +167,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, over
 #'      contained in the $trees attribute.
 #'
 #' @param td A fitted treedater object 
-#' @param tres a list or multiPhylo with bootstrap trees with branches in evolutionary distance 
+#' @param tres A list or multiPhylo with bootstrap trees with branches in units of substitutions per site 
 #' @param ncpu Number of threads to use for parallel computation. Recommended.
 #' @param searchRoot See *dater*
 #' @param overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution. 
@@ -190,6 +191,8 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, over
 #' parboot
 #'
 #' @author Erik M Volz <erik.volz@gmail.com>
+#'
+#' @export 
 boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=F, parallel_foreach = FALSE )
 {
 	nreps <- length(tres )
@@ -248,13 +251,14 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 	if (ncpu > 1)
 	{
 		if (parallel_foreach){
+			require(foreach)
 			tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% .boot.replicate(k)
 		} else{
 			tds <- parallel::mclapply( 1:nreps, function(k) .boot.replicate(k) 
 			, mc.cores = ncpu ) 
 		}
 	} else{
-		tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %do% .boot.replicate( )
+		tds <- lapply( 1:nreps, function(k) .boot.replicate(k) )
 	}
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
@@ -315,6 +319,8 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 #' }
 #'
 #' @author Erik M Volz <erik.volz@gmail.com>
+#'
+#' @export 
 relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T )
 {
 	argnames <- names(list(...))
