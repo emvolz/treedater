@@ -11,7 +11,7 @@ boot(td, tres, ncpu = 1, searchRoot = 1, overrideTempConstraint = TRUE,
 \arguments{
 \item{td}{A fitted treedater object}
 
-\item{tres}{a list or multiPhylo with bootstrap trees with branches in evolutionary distance}
+\item{tres}{A list or multiPhylo with bootstrap trees with branches in units of substitutions per site}
 
 \item{ncpu}{Number of threads to use for parallel computation. Recommended.}
 

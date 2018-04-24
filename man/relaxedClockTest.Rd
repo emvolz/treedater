@@ -4,7 +4,7 @@
 \alias{relaxedClockTest}
 \title{Use parametric bootstrap to test if relaxed clock offers improved fit to data.}
 \usage{
-relaxedClockTest(..., nreps = 100, overrideTempConstraint = T)
+relaxedClockTest(..., nreps = 100, overrideTempConstraint = T, ncpu = 1)
 }
 \arguments{
 \item{...}{arguments passed to *dater*}
@@ -12,6 +12,8 @@ relaxedClockTest(..., nreps = 100, overrideTempConstraint = T)
 \item{nreps}{Integer number of simulations}
 
 \item{overrideTempConstraint}{see *parboot*}
+
+\item{ncpu}{Number of threads to use for parallel computation. Recommended.}
 }
 \value{
 A list with elements:

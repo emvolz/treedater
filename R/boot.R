@@ -308,6 +308,7 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 #' @param ... arguments passed to *dater*
 #' @param nreps Integer number of simulations
 #' @param overrideTempConstraint see *parboot*
+#' @param ncpu Number of threads to use for parallel computation. Recommended.
 #' 
 #' @return  A list with elements:
 #' \itemize{
@@ -321,13 +322,13 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 #' @author Erik M Volz <erik.volz@gmail.com>
 #'
 #' @export 
-relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T )
+relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T , ncpu =1 )
 {
 	argnames <- names(list(...))
 	if ( 'strictClock'  %in% argnames) stop('Can not prespecify clock type *strictClock* for relaxed.clock.test. Quitting.')
 	td <- dater(..., strict=TRUE)
-	pbtd <-  parboot.treedater( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
-	 , overrideClock = 'relaxed' )
+	pbtd <-  parboot( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
+	 , overrideClock = 'relaxed' , ncpu = ncpu )
 	cvci_null <- pbtd$coef_of_variation_CI
 	
 	tdrc <- dater(..., strict=FALSE)
@@ -348,6 +349,7 @@ relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T )
 
 ##
 
+#' @export 
 print.bootTreedater = print.boot.treedater <- function( x, ... )
 {
 	stopifnot(inherits(x, "bootTreedater"))
@@ -369,9 +371,17 @@ print.bootTreedater = print.boot.treedater <- function( x, ... )
 	invisible(x)
 }
 
-plot.bootTreedater <- function(pbtd, t0 = NA, res = 100,  ... )
+#' Plots lineages through time and confidence intervals estimated by bootstrap. 
+#'
+#' @param pbtd A bootTreedater object produced by *parboot* or *boot*
+#' @param t0 The lower bound of the time axis to show
+#' @param res The number of time points on the time axis
+#' @param ggplot If TRUE, will return a plot made with the ggplot2 package
+#' @param ... Additional arg's are passed to *ggplot* or *plot*
+#' @export 
+plot.bootTreedater <- function(pbtd, t0 = NA, res = 100, ggplot=FALSE, ... )
 {
-	stopifnot(inherits(x, "bootTreedater"))
+	stopifnot(inherits(pbtd, "bootTreedater"))
 	t1 <- max( pbtd$td$sts, na.rm=T )
 	if (is.na(t0)) t0 <- min( sapply( pbtd$trees, function(tr) tr$timeOf ) )
 	times <- seq( t0, t1, l = res )
@@ -382,16 +392,19 @@ plot.bootTreedater <- function(pbtd, t0 = NA, res = 100,  ... )
 			), c('lb', 'median', 'ub') )
 		)
 	}))) -> ltt
-	
+	pl.df <- as.data.frame( ltt )
 	if (ggplot){
-		pl.df <- as.data.frame( ltt )
-		p <- ggplot( pl.df ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
+		require(ggplot2)
+		p <- ggplot( pl.df, ... ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
 		p <- p + geom_path( aes(x = times, y = pml ))
 		return (p <- p + ylab( 'Lineages through time') + xlab('Time')  )
 	}
 	with( pl.df ,{
-		plot( times, lb, type = 'l', lty = 3, lwd = .5, xlab = 'Time', ylab= 'Lineages through time', main=''  )
-		lines( times, ub, lty = 3, lwd = .5)
+		plot( times, lb, type = 'l', lty = 3, lwd = 1, xlab = 'Time', ylab= 'Lineages through time'#, main='' 
+		  , ylim = c(0, max(ub)+1)  , ...)
+		lines( times, ub, lty = 3, lwd = 1)
 		lines( times, pml, lwd = 2) 
 	})
 }
+#~ plot(pb)
+#~ require(devtools); build_vignettes()

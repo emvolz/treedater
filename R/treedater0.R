@@ -1,7 +1,3 @@
-require(ape)
-require(limSolve)
-#~ require(mgcv)
-
 #' Compute a vector of numeric sample times from labels in a sequence aligment or phylogeny
 #' 
 #' @param tips A character vector supplying the name of each sample 
@@ -292,89 +288,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	t[inodes]
 }
 
-#' Estimate a time-scaled tree and fit a molecular clock
-#'
-#' @details 
-#' Estimates the calendar time of nodes in the given phylogenetic
-#' tree with branches in units of substitutions per site. The
-#' calendar time of each sample must also be specified and the length
-#' of the sequences used to estimate the tree. If the tree is not
-#' rooted, this function will estimate the root position.
-#' 
-#' @section References:
-#' E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
-#' 
-#' @param tre An ape::phylo which describes the phylogeny with branches in
-#'        units of substitutions per site. This may be a rooted or
-#'        unrooted tree. If unrooted, the root position will be
-#'        estimated by checking multiple candidates chosen by
-#'        root-to-tip regression.  If the tree has multifurcations,
-#'        these will be resolved and a binary tree will be returned.
-#' @param sts Vector of sample times for each tip in phylogenetic tree.
-#'        Vector must be named with names corresponding to
-#'        tre$tip.label.
-#' @param s Sequence length (numeric). This should correspond to sequence length used in phylogenetic analysis and will not necessarily be the same as genome length. 
-#' @param omega0 Initial guess of the mean substitution rate (substitutions
-#'        per site per unit time). If not provided, will guess using
-#'        root to tip regression.
-#' @param minblen Minimum branch length in calendar time. By default, this will
-#'        be the range of sample times (max - min) divided by sample
-#'        size.
-#' @param maxit Maximum number of iterations 
-#' @param abstol Difference in log likelihood between successive iterations for convergence.
-#' @param searchRoot Will search for the optimal root position using the top
-#'        matches from root-to-tip regression.  If searchRoot=x, dates
-#'        will be estimated for x trees, and the estimate with the
-#'        highest likelihood will be returned.
-#' @param quiet If TRUE, will suppress messages during execution 
-#' @param temporalConstraints  If TRUE, will enforce the condition that an
-#'        ancestor node in the phylogeny occurs before all progeny.
-#'        Equivalently, this will preclude negative branch lengths.
-#'        Note that execution is faster if this option is FALSE.
-#' @param strictClock If TRUE, will fit a Poisson evolutionary model without
-#'        rate variation.
-#' @param estimateSampleTimes If some sample times are not known with certainty,
-#'         bounds can be provided with this option. This should take the
-#'         form of a data frame with columns 'lower' and 'upper'
-#'         providing the sample time bounds for each uncertain tip. Row
-#'         names of the data frame should correspond to elements in
-#'         tip.label of the input tree. Tips with sample time bounds in
-#'         this data frame do not need to appear in the *sts* argument,
-#'         however if they are included in *sts*, that value will be
-#'         used as a starting condition for optimisation.
-#' @param estimateSampleTimes_densities: An optional named list of log densities
-#'           which would be used as priors for unknown sample times. Names
-#'           should correspond to elements in tip.label with uncertain
-#'           sample times.
-#' @param numStartConditions Will attempt optimisation from more than one starting point if >0
-#' @param clsSolver Which package should be used for constrained least-squares? Options are _mgcv_ or _limSolve_
-#' @param meanRateLimits Optional constraints for the mean substitution rate 
-#' @param ncpu Number of threads for parallel computing 
-#' @param parallel_foreach If TRUE, will use the _foreach_ package instead of the _parallel_ package. This may work better on some HPC systems. 
-#' 
-#' @return A time-scaled tree and estimated molecular clock rate 
-#' 
-#' @author Erik M Volz <erik.volz@gmail.com>
-#' 
-#' @seealso 
-#' ape::chronos
-#' ape::estimate.mu
-#'
-#' @examples
-#' \dontrun{
-#' 	## simulate a random tree and sample times for demonstration
-#'      # make a random tree
-#'      tre <- rtree(50)
-#'      # sample times based on distance from root to tip
-#'      sts <- setNames(  dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)], tre$tip.label)
-#'      # modify edge length to represent evolutionary distance with rate 1e-3
-#'      tre$edge.length <- tre$edge.length * 1e-3
-#'      # treedater: 
-#'      td <- dater( tre, sts =sts )
-#' }
-#'
-#' @export 
-dater <- function(tre, sts, s=1e3
+.dater <- function(tre, sts, s=1e3
  , omega0 = NA
  , minblen = NA
  , maxit=100
@@ -390,150 +304,15 @@ dater <- function(tre, sts, s=1e3
  , meanRateLimits = NULL
  , ncpu = 1
  , parallel_foreach = FALSE
+ , lnd.mean.rate.prior = function(x) 0
+ , tiplabel_est_samp_times = NULL
+ , iedge_tiplabel_est_samp_times = NULL
+ , EST_SAMP_TIMES  = FALSE
 )
-{ 
-	clsSolver <- match.arg( 'clsSolver') #clsSolver[1]
+{
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
-	
-	if (!is.binary( tre ) ){
-		cat( 'Note: *dater* called with non binary tree. Will proceed after resolving polytomies.\n' )
-		if ( !is.rooted( tre )){
-			tre <- unroot( multi2di( tre ) ) 
-		} else{
-			tre <-  multi2di( tre ) 
-		}
-	}
-	
-	if (class(tre)[1]=='treedater'){
-		cat('Note: *dater* called with treedater input tree. Will use rooted tree with branch lengths in substitions.\n')
-		tre <- tre$intree
-	}
-	
-	# optional limits or prior for mean rate
-	lnd.mean.rate.prior <- function(x) 0 #dunif( x , 0, Inf, log=TRUE )
-	if (is.null( meanRateLimits) ) {
-		meanRateLimits <- c( 0, Inf)
-	} else if ( class(meanRateLimits)=='function'){
-		lnd.mean.rate.prior <- meanRateLimits
-		meanRateLimits <- c(0, Inf)
-	} else{
-		MEANRATEERR <- '*meanRateLimits* should be a length 2 vector providing bounds on the mean rate parameter OR a function providing the log prior density of the mean rate parameter. '
-		if (length( meanRateLimits) != 2) stop(MEANRATEERR)
-		if (meanRateLimits[2] <= meanRateLimits[1]) stop(MEANRATEERR)
-		#lnd.mean.rate.prior <- function(x) dunif( x , meanRateLimits[1], meanRateLimits[2], log= TRUE )
-		lnd.mean.rate.prior <- function(x) ifelse( x >= meanRateLimits[1] & x <= meanRateLimits[2], 0, -Inf )
-	}
-	
-	numStartConditions <- max(0, round( numStartConditions )) # number of omega0 to try for optimisation
-	
-	EST_SAMP_TIMES <- TRUE
-	EST_SAMP_TIMES_ERR <- 'estimateSampleTimes must specify a data frame with tip.label as row names and with columns `upper` and `lower`. You may also provide a named list of log density functions (improper priors for sample times).\n'
-	if (is.null(estimateSampleTimes)) EST_SAMP_TIMES <- FALSE
-	.estimateSampleTimes_densities <- estimateSampleTimes_densities
-	if (EST_SAMP_TIMES){
-		if (class(estimateSampleTimes)=='data.frame'){
-			if ( !('lower' %in% colnames(estimateSampleTimes)) | !('upper' %in% colnames(estimateSampleTimes) ) ){
-				stop(EST_SAMP_TIMES_ERR)
-			}
-			if ( any (estimateSampleTimes$lower > estimateSampleTimes$upper) ){
-				stop(EST_SAMP_TIMES_ERR )
-			}
-			estimateSampleTimes <- estimateSampleTimes[ estimateSampleTimes$lower < estimateSampleTimes$upper ,]
-			for (tl in rownames(estimateSampleTimes)){
-				if (!(tl %in% names( estimateSampleTimes_densities))){
-					estimateSampleTimes_densities[[tl]] <-  function(x,tl) dunif(x, min= estimateSampleTimes[tl,'lower'], max=estimateSampleTimes[tl,'upper'] , log = TRUE) #TODO maybe deprecate
-				}
-			}
-		} else {
-			stop(EST_SAMP_TIMES_ERR)
-		}
-		tiplabel_est_samp_times <- intersect( rownames(estimateSampleTimes), tre$tip.label)
-		iedge_tiplabel_est_samp_times <- match( tiplabel_est_samp_times, tre$tip.label[tre$edge[,2]] )
-	}
-		
-	# check for missing sample times, impute missing if needed 
-	#if (any(is.na(sts))) stop( 'Some sample times are NA.' )
-	stinfo_provided <- union( names(na.omit(sts)), rownames(estimateSampleTimes))
-	stinfo_not_provided <-   setdiff( tre$tip.label, stinfo_provided ) 
-	if (length( stinfo_not_provided ) > 0){
-		cat( 'NOTE: Neither sample times nor sample time bounds were provided for the following lineages:\n')
-		cat( stinfo_not_provided )
-		cat('\n Provide sampling info or remove these lineages from the tree. Stopping.\n ') 
-		stop('Missing sample time information.' )
-	}
-	initial_st_should_impute <- setdiff( rownames(estimateSampleTimes), names(na.omit(sts)))
-	if (length( initial_st_should_impute ) > 0){
-		cat('NOTE: initial guess of sample times for following lineages was not provided:\n')
-		cat ( initial_st_should_impute )
-		cat('\n') 
-		cat( 'Will proceed with midpoint of provided range as initial guess of these sample times.\n')
-		sts[initial_st_should_impute] <- rowMeans( estimateSampleTimes )[initial_st_should_impute] 
-	}
-	
-	if (is.null(names(sts))){
-		if (length(sts)!=length(tre$tip.label)) stop('Sample time vector length does not match number of lineages.')
-		names(sts) <- tre$tip.label
-	}
-	sts <- sts[tre$tip.label]
-	
-	intree_rooted <- TRUE
-	if (!is.rooted(tre)){
-		intree_rooted <- FALSE
-		if (!quiet) cat( 'Tree is not rooted. Searching for best root position. Increase searchRoot to try harder.\n')
-		searchRoot <- round( searchRoot )
-		rtres <- .multi.rtt(tre, sts, topx=searchRoot, ncpu = ncpu)
-		if (ncpu > 1 )
-		{
-			if (parallel_foreach){
-				require(foreach)
-				tds <- foreach( t = iter( rtres )) %dopar% {
-					dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-						, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
-						, estimateSampleTimes = estimateSampleTimes
-						, estimateSampleTimes_densities = .estimateSampleTimes_densities  
-						, numStartConditions = numStartConditions
-						, meanRateLimits = meanRateLimits
-						) 
-				}
-			} else{
-				tds <- parallel::mclapply( rtres, function(t){
-					dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-						, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
-						, estimateSampleTimes = estimateSampleTimes
-						, estimateSampleTimes_densities = .estimateSampleTimes_densities  
-						, numStartConditions = numStartConditions
-						, meanRateLimits = meanRateLimits
-						) 
-				}, mc.cores = ncpu )
-			}
-		} else{
-			tds <- lapply( rtres, function(t) {
-					dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-					, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
-					, estimateSampleTimes = estimateSampleTimes
-					, estimateSampleTimes_densities = .estimateSampleTimes_densities  
-					, numStartConditions = numStartConditions
-					, meanRateLimits = meanRateLimits
-					) 
-			})
-		}
-		lls <- sapply( tds, function(td) td$loglik )
-		td <- tds [[ which.max( lls ) ]]
-		td$intree_rooted <- FALSE
-		return ( td )
-	} else{
-		if (!quiet) cat( 'Tree is rooted. Not estimating root position.\n')
-	}
-	if (is.na(minblen)){
-		minblen <- diff(range(sts))/ length(sts) #TODO choice of this parm is difficult, may require sep optim / crossval
-		cat(paste0('Note: Minimum temporal branch length set to ', minblen, '. Increase this value in the event of convergence failures. \n'))
-	}
-	if (!is.na(omega0) & numStartConditions > 0 ){
-		warning('omega0 provided incompatible with numStartConditions > 0. Setting numStartConditions to zero.')
-		numStartConditions <- 0
-	}
 	if (is.na(omega0)){
 		# guess
 		#omega0 <- estimate.mu( tre, sts )
@@ -546,10 +325,10 @@ dater <- function(tre, sts, s=1e3
 		}
 		omega0s <- qnorm( unique(sort(c(.5, seq(.025, .975, l=numStartConditions*2) )))  , omega0, sd = omega0sd )
 		omega0s <- omega0s[ omega0s > 0 ]
-		if (!quiet){
-			cat('initial rates:\n')
-			print(omega0s)
-		}
+		#if (!quiet){
+		#	cat('initial rates:\n')
+		#	print(omega0s)
+		#}
 	} else{
 		omega0s <- c( omega0 )
 	}
@@ -704,6 +483,271 @@ dater <- function(tre, sts, s=1e3
 	rv
 }
 
+#' Estimate a time-scaled tree and fit a molecular clock
+#'
+#' @details 
+#' Estimates the calendar time of nodes in the given phylogenetic
+#' tree with branches in units of substitutions per site. The
+#' calendar time of each sample must also be specified and the length
+#' of the sequences used to estimate the tree. If the tree is not
+#' rooted, this function will estimate the root position.
+#' 
+#' @section References:
+#' E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
+#' 
+#' @param tre An ape::phylo which describes the phylogeny with branches in
+#'        units of substitutions per site. This may be a rooted or
+#'        unrooted tree. If unrooted, the root position will be
+#'        estimated by checking multiple candidates chosen by
+#'        root-to-tip regression.  If the tree has multifurcations,
+#'        these will be resolved and a binary tree will be returned.
+#' @param sts Vector of sample times for each tip in phylogenetic tree.
+#'        Vector must be named with names corresponding to
+#'        tre$tip.label.
+#' @param s Sequence length (numeric). This should correspond to sequence length used in phylogenetic analysis and will not necessarily be the same as genome length. 
+#' @param omega0 Initial guess of the mean substitution rate (substitutions
+#'        per site per unit time). If not provided, will guess using
+#'        root to tip regression.
+#' @param minblen Minimum branch length in calendar time. By default, this will
+#'        be the range of sample times (max - min) divided by sample
+#'        size.
+#' @param maxit Maximum number of iterations 
+#' @param abstol Difference in log likelihood between successive iterations for convergence.
+#' @param searchRoot Will search for the optimal root position using the top
+#'        matches from root-to-tip regression.  If searchRoot=x, dates
+#'        will be estimated for x trees, and the estimate with the
+#'        highest likelihood will be returned.
+#' @param quiet If TRUE, will suppress messages during execution 
+#' @param temporalConstraints  If TRUE, will enforce the condition that an
+#'        ancestor node in the phylogeny occurs before all progeny.
+#'        Equivalently, this will preclude negative branch lengths.
+#'        Note that execution is faster if this option is FALSE.
+#' @param strictClock If TRUE, will fit a Poisson evolutionary model without
+#'        rate variation.
+#' @param estimateSampleTimes If some sample times are not known with certainty,
+#'         bounds can be provided with this option. This should take the
+#'         form of a data frame with columns 'lower' and 'upper'
+#'         providing the sample time bounds for each uncertain tip. Row
+#'         names of the data frame should correspond to elements in
+#'         tip.label of the input tree. Tips with sample time bounds in
+#'         this data frame do not need to appear in the *sts* argument,
+#'         however if they are included in *sts*, that value will be
+#'         used as a starting condition for optimisation.
+#' @param estimateSampleTimes_densities: An optional named list of log densities
+#'           which would be used as priors for unknown sample times. Names
+#'           should correspond to elements in tip.label with uncertain
+#'           sample times.
+#' @param numStartConditions Will attempt optimisation from more than one starting point if >0
+#' @param clsSolver Which package should be used for constrained least-squares? Options are _mgcv_ or _limSolve_
+#' @param meanRateLimits Optional constraints for the mean substitution rate 
+#' @param ncpu Number of threads for parallel computing 
+#' @param parallel_foreach If TRUE, will use the _foreach_ package instead of the _parallel_ package. This may work better on some HPC systems. 
+#' 
+#' @return A time-scaled tree and estimated molecular clock rate 
+#' 
+#' @author Erik M Volz <erik.volz@gmail.com>
+#' 
+#' @seealso 
+#' ape::chronos
+#' ape::estimate.mu
+#'
+#' @examples
+#' \dontrun{
+#' 	## simulate a random tree and sample times for demonstration
+#'      # make a random tree
+#'      tre <- rtree(50)
+#'      # sample times based on distance from root to tip
+#'      sts <- setNames(  dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)], tre$tip.label)
+#'      # modify edge length to represent evolutionary distance with rate 1e-3
+#'      tre$edge.length <- tre$edge.length * 1e-3
+#'      # treedater: 
+#'      td <- dater( tre, sts =sts )
+#' }
+#'
+#' @export 
+dater <- function(tre, sts, s=1e3
+ , omega0 = NA
+ , minblen = NA
+ , maxit=100
+ , abstol = .0001
+ , searchRoot = 5
+ , quiet = FALSE #TODO
+ , temporalConstraints = TRUE
+ , strictClock = FALSE
+ , estimateSampleTimes = NULL
+ , estimateSampleTimes_densities= list()
+ , numStartConditions = 0
+ , clsSolver=c('limSolve', 'mgcv')
+ , meanRateLimits = NULL
+ , ncpu = 1
+ , parallel_foreach = FALSE
+)
+{ 
+	clsSolver <- match.arg( clsSolver) #clsSolver[1]	
+	if (!is.binary( tre ) ){
+		cat( 'Note: *dater* called with non binary tree. Will proceed after resolving polytomies.\n' )
+		if ( !is.rooted( tre )){
+			tre <- unroot( multi2di( tre ) ) 
+		} else{
+			tre <-  multi2di( tre ) 
+		}
+	}
+	
+	if (class(tre)[1]=='treedater'){
+		cat('Note: *dater* called with treedater input tree. Will use rooted tree with branch lengths in substitions.\n')
+		tre <- tre$intree
+	}
+	
+	# optional limits or prior for mean rate
+	lnd.mean.rate.prior <- function(x) 0 #dunif( x , 0, Inf, log=TRUE )
+	if (is.null( meanRateLimits) ) {
+		meanRateLimits <- c( 0, Inf)
+	} else if ( class(meanRateLimits)=='function'){
+		lnd.mean.rate.prior <- meanRateLimits
+		meanRateLimits <- c(0, Inf)
+	} else{
+		MEANRATEERR <- '*meanRateLimits* should be a length 2 vector providing bounds on the mean rate parameter OR a function providing the log prior density of the mean rate parameter. '
+		if (length( meanRateLimits) != 2) stop(MEANRATEERR)
+		if (meanRateLimits[2] <= meanRateLimits[1]) stop(MEANRATEERR)
+		#lnd.mean.rate.prior <- function(x) dunif( x , meanRateLimits[1], meanRateLimits[2], log= TRUE )
+		lnd.mean.rate.prior <- function(x) ifelse( x >= meanRateLimits[1] & x <= meanRateLimits[2], 0, -Inf )
+	}
+	
+	numStartConditions <- max(0, round( numStartConditions )) # number of omega0 to try for optimisation
+	
+	EST_SAMP_TIMES <- TRUE
+	EST_SAMP_TIMES_ERR <- 'estimateSampleTimes must specify a data frame with tip.label as row names and with columns `upper` and `lower`. You may also provide a named list of log density functions (improper priors for sample times).\n'
+	if (is.null(estimateSampleTimes)) EST_SAMP_TIMES <- FALSE
+	if (EST_SAMP_TIMES){
+		if (class(estimateSampleTimes)=='data.frame'){
+			if ( !('lower' %in% colnames(estimateSampleTimes)) | !('upper' %in% colnames(estimateSampleTimes) ) ){
+				stop(EST_SAMP_TIMES_ERR)
+			}
+			if ( any (estimateSampleTimes$lower > estimateSampleTimes$upper) ){
+				stop(EST_SAMP_TIMES_ERR )
+			}
+			estimateSampleTimes <- estimateSampleTimes[ estimateSampleTimes$lower < estimateSampleTimes$upper ,]
+			for (tl in rownames(estimateSampleTimes)){
+				if (!(tl %in% names( estimateSampleTimes_densities))){
+					estimateSampleTimes_densities[[tl]] <-  function(x,tl) dunif(x, min= estimateSampleTimes[tl,'lower'], max=estimateSampleTimes[tl,'upper'] , log = TRUE) #
+				}
+			}
+		} else {
+			stop(EST_SAMP_TIMES_ERR)
+		}
+		tiplabel_est_samp_times <- intersect( rownames(estimateSampleTimes), tre$tip.label)
+		iedge_tiplabel_est_samp_times <- match( tiplabel_est_samp_times, tre$tip.label[tre$edge[,2]] )
+	}
+		
+	# check for missing sample times, impute missing if needed 
+	#if (any(is.na(sts))) stop( 'Some sample times are NA.' )
+	stinfo_provided <- union( names(na.omit(sts)), rownames(estimateSampleTimes))
+	stinfo_not_provided <-   setdiff( tre$tip.label, stinfo_provided ) 
+	if (length( stinfo_not_provided ) > 0){
+		cat( 'NOTE: Neither sample times nor sample time bounds were provided for the following lineages:\n')
+		cat( stinfo_not_provided )
+		cat('\n Provide sampling info or remove these lineages from the tree. Stopping.\n ') 
+		stop('Missing sample time information.' )
+	}
+	initial_st_should_impute <- setdiff( rownames(estimateSampleTimes), names(na.omit(sts)))
+	if (length( initial_st_should_impute ) > 0){
+		cat('NOTE: initial guess of sample times for following lineages was not provided:\n')
+		cat ( initial_st_should_impute )
+		cat('\n') 
+		cat( 'Will proceed with midpoint of provided range as initial guess of these sample times.\n')
+		sts[initial_st_should_impute] <- rowMeans( estimateSampleTimes )[initial_st_should_impute] 
+	}
+	
+	if (is.null(names(sts))){
+		if (length(sts)!=length(tre$tip.label)) stop('Sample time vector length does not match number of lineages.')
+		names(sts) <- tre$tip.label
+	}
+	sts <- sts[tre$tip.label]
+	
+	if (is.na(minblen)){
+		minblen <- diff(range(sts))/ length(sts) / 10 #TODO choice of this parm is difficult, may require sep optim / crossval
+		cat(paste0('Note: Minimum temporal branch length set to ', minblen, '. Increase this value in the event of convergence failures. \n'))
+	}
+	if (!is.na(omega0) & numStartConditions > 0 ){
+		warning('omega0 provided incompatible with numStartConditions > 0. Setting numStartConditions to zero.')
+		numStartConditions <- 0
+	}
+	
+	intree_rooted <- TRUE
+	if (!is.rooted(tre)){
+		intree_rooted <- FALSE
+		cat( 'Tree is not rooted. Searching for best root position. Increase searchRoot to try harder.\n')
+		searchRoot <- round( searchRoot )
+		rtres <- .multi.rtt(tre, sts, topx=searchRoot, ncpu = ncpu)
+		if (ncpu > 1 )
+		{
+			if (parallel_foreach){
+				require(foreach)
+				tds <- foreach( t = iter( rtres )) %dopar% {
+					.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
+						, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+						, estimateSampleTimes = estimateSampleTimes
+						, estimateSampleTimes_densities = estimateSampleTimes_densities  
+						, numStartConditions = numStartConditions
+						, meanRateLimits = meanRateLimits
+						, lnd.mean.rate.prior =  lnd.mean.rate.prior 
+						, tiplabel_est_samp_times = tiplabel_est_samp_times
+						, iedge_tiplabel_est_samp_times = iedge_tiplabel_est_samp_times
+						, EST_SAMP_TIMES  = EST_SAMP_TIMES
+						) 
+				}
+			} else{
+				tds <- parallel::mclapply( rtres, function(t){
+					.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
+						, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+						, estimateSampleTimes = estimateSampleTimes
+						, estimateSampleTimes_densities = estimateSampleTimes_densities  
+						, numStartConditions = numStartConditions
+						, meanRateLimits = meanRateLimits
+						, lnd.mean.rate.prior =  lnd.mean.rate.prior 
+						, tiplabel_est_samp_times = tiplabel_est_samp_times
+						, iedge_tiplabel_est_samp_times = iedge_tiplabel_est_samp_times
+						, EST_SAMP_TIMES  = EST_SAMP_TIMES
+						) 
+				}, mc.cores = ncpu )
+			}
+		} else{
+			tds <- lapply( rtres, function(t) {
+				.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
+					, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+					, estimateSampleTimes = estimateSampleTimes
+					, estimateSampleTimes_densities = estimateSampleTimes_densities  
+					, numStartConditions = numStartConditions
+					, meanRateLimits = meanRateLimits
+					, lnd.mean.rate.prior = lnd.mean.rate.prior 
+					, tiplabel_est_samp_times = tiplabel_est_samp_times
+					, iedge_tiplabel_est_samp_times = iedge_tiplabel_est_samp_times
+					, EST_SAMP_TIMES  = EST_SAMP_TIMES
+					) 
+			})
+		}
+		lls <- sapply( tds, function(td) td$loglik )
+		td <- tds [[ which.max( lls ) ]]
+		td$intree_rooted <- FALSE
+		return ( td )
+	} else{
+		cat( 'Tree is rooted. Not estimating root position.\n')
+	}
+	.dater( tre, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
+		, strictClock = strictClock, temporalConstraints = temporalConstraints
+		, quiet = quiet
+		, estimateSampleTimes = estimateSampleTimes
+		, estimateSampleTimes_densities = estimateSampleTimes_densities  
+		, numStartConditions = numStartConditions
+		, meanRateLimits = meanRateLimits
+		, lnd.mean.rate.prior = lnd.mean.rate.prior 
+		, tiplabel_est_samp_times = tiplabel_est_samp_times
+		, iedge_tiplabel_est_samp_times = iedge_tiplabel_est_samp_times
+		, EST_SAMP_TIMES  = EST_SAMP_TIMES
+	)
+}
+
+#' @export 
 print.treedater <- function(x, ...){
     cl <- oldClass(x)
     oldClass(x) <- cl[cl != "treedater"]
@@ -722,6 +766,7 @@ print.treedater <- function(x, ...){
     invisible(x)
 }
 
+#' @export 
 summary.treedater <- function(x, ...) {
     stopifnot(inherits(x, "treedater"))
     print.treedater( x )

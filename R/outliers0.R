@@ -1,5 +1,16 @@
-
-outlier.lineages <- function(td, alpha = .01, type=c('tips','internal', 'all')){
+#' Detect lineages with unusually large evolutionary divergence under the fitted treedater model
+#'
+#' Outliers are detected using the *stats::p.adjust* function and the 'fdr' function. The test requires that *dater* was used with the temporalConstraints=TRUE.
+#'
+#' @param td A fitted treedater object
+#' @param alpha The tail probability used for classifying lineages as outliers
+#' @param type Should outliers be detected on tip lineages, interal lineages, or all lineages? 
+#' @return A data frame summarizing for each lineage the p values, adjusted p values ('q'), likelihood, rates, and branch lengths. 
+#' @seealso 
+#' dater
+#' outlier.tips
+#' @export
+outlierLineages <- function(td, alpha = .01, type=c('tips','internal', 'all')){
 	if (length(type)>1) type <- type[1]
 	if ( !td$temporalConstraints ){
 		stop('The outlier.tips function requires a treedater object fitted using temporalConstraints=TRUE. Quitting.')
@@ -71,8 +82,17 @@ outlier.lineages <- function(td, alpha = .01, type=c('tips','internal', 'all')){
 	qu.df
 }
 
-
-
-outlier.tips <- function( td, alpha = .01){
-	outlier.lineages(td, alpha = .01)
+#' Detect terminal lineages with unusually large evolutionary divergence under the fitted treedater model
+#'
+#' This is a convient wrapper of the *outlier.lineages*
+#'
+#' @param td A fitted treedater object
+#' @param alpha The tail probability used for classifying lineages as outliers
+#' @return A data frame summarizing for each lineage the p values, adjusted p values ('q'), likelihood, rates, and branch lengths. 
+#' @seealso 
+#' dater
+#' outlier.lineages
+#' @export
+outlierTips <- function( td, alpha = .01){
+	outlierLineages(td, alpha = .01)
 }
