@@ -62,6 +62,11 @@ this data frame do not need to appear in the *sts* argument,
 however if they are included in *sts*, that value will be
 used as a starting condition for optimisation.}
 
+\item{estimateSampleTimes_densities}{An optional named list of log densities
+which would be used as priors for unknown sample times. Names
+should correspond to elements in tip.label with uncertain
+sample times.}
+
 \item{numStartConditions}{Will attempt optimisation from more than one starting point if >0}
 
 \item{clsSolver}{Which package should be used for constrained least-squares? Options are _mgcv_ or _limSolve_}
@@ -71,11 +76,6 @@ used as a starting condition for optimisation.}
 \item{ncpu}{Number of threads for parallel computing}
 
 \item{parallel_foreach}{If TRUE, will use the _foreach_ package instead of the _parallel_ package. This may work better on some HPC systems.}
-
-\item{estimateSampleTimes_densities:}{An optional named list of log densities
-which would be used as priors for unknown sample times. Names
-should correspond to elements in tip.label with uncertain
-sample times.}
 }
 \value{
 A time-scaled tree and estimated molecular clock rate
@@ -101,7 +101,9 @@ E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. V
      # make a random tree
      tre <- rtree(50)
      # sample times based on distance from root to tip
-     sts <- setNames(  dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)], tre$tip.label)
+     sts <- setNames(  
+	  dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
+	, tre$tip.label)
      # modify edge length to represent evolutionary distance with rate 1e-3
      tre$edge.length <- tre$edge.length * 1e-3
      # treedater: 

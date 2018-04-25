@@ -1,12 +1,17 @@
 ---
 title: "Molecular clock dating of Influenza H3N2"
 author: "Erik Volz"
+date: "`r Sys.Date()`"
 output: rmarkdown::html_document
 vignette: >
-  %\VignetteIndexEntry{Molecular clock dating of Influenza H3N2}
+  %\VignetteIndexEntry{H3N2}
   %\VignetteEngine{knitr::rmarkdown}
   \usepackage[utf8]{inputenc}
 ---
+<!--
+%\VignetteIndexEntry{H3N2}
+%\VignetteEngine{knitr::rmarkdown}
+-->
 
 # Introduction
 `treedater` fits a strict or relaxed molecular clock to a phylogenetic tree and estimates evolutionary rates and times of common ancestry. The calendar time of each sample must be specified (possibly with bounds of uncertainty) and the length of the sequences used to estimate the tree. 
@@ -116,7 +121,7 @@ tre2 <- ape::drop.tip( tre, rownames(outliers[outliers$q < 0.20,]) )
 Now we can rerun `dater` with the reduced tree:
 
 ```{r}
-(dtr2 <- dater(tre2, sts, seqlen ) )
+(dtr2 <- dater(tre2, sts, seqlen, ncpu = 5) )
 ```
 
 After removing the outliers, the coefficient of variation of rates is much lower, suggesting that a strict clock model may be appropriate for the reduced tree. We can test the suitability of the strict clock with this test: 
@@ -166,7 +171,8 @@ plot( pb )
 If the *ggplot2* package is installed, we can use that instead:
 
 ```{r}
-(pb.pl <- plot( pb , ggplot=TRUE) )
+if ( suppressPackageStartupMessages( require(ggplot2)) )
+  (pb.pl <- plot( pb , ggplot=TRUE) )
 ```
 
 Note repeated bottlenecks and seasonal peaks of LTT corresponding to when samples are taken during seasonal epidemics.

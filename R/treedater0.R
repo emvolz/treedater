@@ -1,3 +1,11 @@
+#~ Treedater: fast relaxed molecular clock dating 
+#~     Copyright (C) 2018  Erik Volz
+#~     This program is free software: you can redistribute it and/or modify
+#~     it under the terms of the GNU General Public License as published by
+#~     the Free Software Foundation, either version 3 of the License, or
+#~     (at your option) any later version.
+
+
 #' Compute a vector of numeric sample times from labels in a sequence aligment or phylogeny
 #' 
 #' @param tips A character vector supplying the name of each sample 
@@ -8,9 +16,13 @@
 #' @return Numeric vector with sample time in decimal format. 
 #' @examples 
 #' ## A couple of labels for Ebola virus sequences: 
-#' sampleYearsFromLabels( c('EBOV|AA000000|EM104|SierraLeone_EM|2014-06-02', 'EBOV|AA000000|G3713|SierraLeone_G|2014-06-09'), delimiter='|' )
+#' sampleYearsFromLabels( c('EBOV|AA000000|EM104|SierraLeone_EM|2014-06-02'
+#'                        , 'EBOV|AA000000|G3713|SierraLeone_G|2014-06-09')
+#'	, delimiter='|' )
 #' ## Equivalently: 
-#' sampleYearsFromLabels( c('EBOV|AA000000|EM104|SierraLeone_EM|2014-06-02', 'EBOV|AA000000|G3713|SierraLeone_G|2014-06-09'), regex='[0-9]+-[0-9]+-[0-9]+')
+#' sampleYearsFromLabels( c('EBOV|AA000000|EM104|SierraLeone_EM|2014-06-02'
+#'                        , 'EBOV|AA000000|G3713|SierraLeone_G|2014-06-09')
+#'  , regex='[0-9]+-[0-9]+-[0-9]+')
 #'
 #' @export 
 sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
@@ -19,7 +31,8 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
  , regex=NULL
 )
 {
-	require(lubridate)
+	success = requireNamespace('lubridate', quietly=TRUE)
+	if (!success) stop(' The `sampleYearsFromLabels` function requires the `lubridate` package. Please install `lubridate`. Stopping.')
 	
 	#units <- match.arg(units)
 	if (!is.null(delimiter) & !is.null(regex))
@@ -38,8 +51,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	}
 	
 	tipdates <- as.Date( tipdates, format=dateFormat )
-	#if (is.null(origin)) origin <- min(tipdates)
-	#stopifnot(inherits(origin, "Date"))
 	sts <- lubridate::decimal_date( tipdates )
 	setNames( sts, tips )
 }
@@ -192,7 +203,8 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 
 # <constrained ls>
 .optim.Ti2 <- function( omegas, td ){
-	require(mgcv)
+	success = requireNamespace('mgcv', quietly=TRUE)
+	if (!success) stop('The *mgcv* option requires installation of the `mgcv` package. Stopping.') 
 		A <- omegas * td$A0 
 		B <- td$B0
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
@@ -219,7 +231,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 			,y=B
 			,w=td$W #/omegas # better performance on lsd tests w/o this  
 		)
-		o <- pcls(M)
+		o <- mgcv::pcls(M)
 	o
 }
 #</ constrained ls>
@@ -532,7 +544,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #'         this data frame do not need to appear in the *sts* argument,
 #'         however if they are included in *sts*, that value will be
 #'         used as a starting condition for optimisation.
-#' @param estimateSampleTimes_densities: An optional named list of log densities
+#' @param estimateSampleTimes_densities An optional named list of log densities
 #'           which would be used as priors for unknown sample times. Names
 #'           should correspond to elements in tip.label with uncertain
 #'           sample times.
@@ -556,7 +568,9 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #'      # make a random tree
 #'      tre <- rtree(50)
 #'      # sample times based on distance from root to tip
-#'      sts <- setNames(  dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)], tre$tip.label)
+#'      sts <- setNames(  
+#'		  dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
+#'		, tre$tip.label)
 #'      # modify edge length to represent evolutionary distance with rate 1e-3
 #'      tre$edge.length <- tre$edge.length * 1e-3
 #'      # treedater: 
@@ -682,8 +696,10 @@ dater <- function(tre, sts, s=1e3
 		if (ncpu > 1 )
 		{
 			if (parallel_foreach){
-				require(foreach)
-				tds <- foreach( t = iter( rtres )) %dopar% {
+				success = requireNamespace('foreach', quietly=TRUE)
+				if (!success) stop('*parallel_foreach* requires the `foreach` package. Stopping.')
+				`%dopar%` <- foreach::`%dopar%`
+				tds <- foreach::foreach( t = iterators::iter( rtres )) %dopar% {
 					.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
 						, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
 						, estimateSampleTimes = estimateSampleTimes
@@ -759,9 +775,9 @@ print.treedater <- function(x, ...){
 }
 
 #' @export 
-summary.treedater <- function(x, ...) {
-    stopifnot(inherits(x, "treedater"))
-    print.treedater( x )
+summary.treedater <- function(object, ...) {
+    stopifnot(inherits(object, "treedater"))
+    print.treedater( object )
 }
 
 #' Produce a goodness of fit plot

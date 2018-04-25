@@ -1,3 +1,11 @@
+#~ Treedater: fast relaxed molecular clock dating 
+#~     Copyright (C) 2018  Erik Volz
+#~     This program is free software: you can redistribute it and/or modify
+#~     it under the terms of the GNU General Public License as published by
+#~     the Free Software Foundation, either version 3 of the License, or
+#~     (at your option) any later version.
+
+
 #' Detect lineages with unusually large evolutionary divergence under the fitted treedater model
 #'
 #' Outliers are detected using the *stats::p.adjust* function and the 'fdr' function. The test requires that *dater* was used with the temporalConstraints=TRUE.

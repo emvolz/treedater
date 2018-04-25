@@ -4,7 +4,7 @@
 \alias{outlierTips}
 \title{Detect terminal lineages with unusually large evolutionary divergence under the fitted treedater model}
 \usage{
-outlierTips(td, alpha = 0.01)
+outlierTips(td, alpha = 0.05)
 }
 \arguments{
 \item{td}{A fitted treedater object}

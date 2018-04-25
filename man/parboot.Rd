@@ -4,9 +4,9 @@
 \alias{parboot}
 \title{Estimate of confidence intervals using parametric bootstrap for molecular clock dating.}
 \usage{
-parboot(td, nreps = 100, ncpu = 1, overrideTempConstraint = T,
+parboot(td, nreps = 100, ncpu = 1, overrideTempConstraint = TRUE,
   overrideClock = NULL, overrideSearchRoot = TRUE,
-  overrideSeqLength = NULL, quiet = TRUE, normalApproxTMRCA = F,
+  overrideSeqLength = NULL, quiet = TRUE, normalApproxTMRCA = FALSE,
   parallel_foreach = FALSE)
 }
 \arguments{
@@ -19,6 +19,8 @@ parboot(td, nreps = 100, ncpu = 1, overrideTempConstraint = T,
 \item{overrideTempConstraint}{If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution.}
 
 \item{overrideClock}{May be 'strict' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td}
+
+\item{overrideSearchRoot}{If TRUE, will re-use root position from input treedater tree. Otherwise may re-estimate root position in simulations}
 
 \item{overrideSeqLength}{Optional sequence length to use in simulations}
 

@@ -1,17 +1,16 @@
 Package: treedater
 Type: Package
-Title: Fast molecular clock dating of phylogenetic trees with rate variation
+Title: Fast Molecular Clock Dating of Phylogenetic Trees with Rate Variation
 Version: 0.2.0
 Date: 2018-04-23
 Authors@R: c(person("Erik", "Volz", role = c("aut", "cre"),
                      email = "erik.volz@gmail.com") )
-Author: Erik Volz [aut,cre]
-Maintainer: Erik M Volz <erik.volz@gmail.com>
+Author: Erik Volz [aut, cre]
+Maintainer: Erik Volz <erik.volz@gmail.com>
 Description: Fast molecular clock dating of phylogenetic trees with rate variation. 
 License: GPL
 Imports: ape
 Depends: limSolve
-Enhances: lubridate,ggplot2,foreach,mgcv
-Suggests: knitr, rmarkdown
+Suggests: lubridate,ggplot2,foreach,iterators,mgcv,knitr,rmarkdown
 VignetteBuilder: knitr
 RoxygenNote: 6.0.1

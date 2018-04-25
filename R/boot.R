@@ -1,3 +1,11 @@
+#~ Treedater: fast relaxed molecular clock dating 
+#~     Copyright (C) 2018  Erik Volz
+#~     This program is free software: you can redistribute it and/or modify
+#~     it under the terms of the GNU General Public License as published by
+#~     the Free Software Foundation, either version 3 of the License, or
+#~     (at your option) any later version.
+
+
 #' Estimate of confidence intervals using parametric bootstrap for molecular clock dating.
 #'
 #'     This function simulates phylogenies with branch lengths in units
@@ -19,8 +27,9 @@
 #' @param td A fitted treedater object 
 #' @param nreps Integer number of simulations to be carried out 
 #' @param ncpu Number of threads to use for parallel computation. Recommended.
-#' @param  overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution. 
+#' @param overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution. 
 #' @param overrideClock May be 'strict' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td
+#' @param overrideSearchRoot If TRUE, will re-use root position from input treedater tree. Otherwise may re-estimate root position in simulations
 #' @param overrideSeqLength Optional sequence length to use in simulations
 #' @param quiet If TRUE will minimize output printed to screen
 #' @param normalApproxTMRCA If TRUE will use estimate standard deviation from simulation replicates and report confidence interval based on normal distribution
@@ -43,8 +52,9 @@
 #' @author Erik M Volz <erik.volz@gmail.com>
 #'
 #' @export 
-parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=F, parallel_foreach = FALSE )
+parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=FALSE, parallel_foreach = FALSE )
 {
+	k = 0 # resolve NOTE about 'visible binding for global variable'
 	if (quiet){
 	cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
 	}
@@ -111,14 +121,25 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, over
 	if (ncpu > 1)
 	{
 		if (parallel_foreach){
-			require(foreach)
-			tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% .parboot.replicate(k)
+			success = requireNamespace('foreach', quietly=TRUE)
+			if (!success) stop('*parallel_foreach* requires the `foreach` package. Stopping.')
+			`%dopar%` <- foreach::`%dopar%`
+			tds <- foreach::foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% {
+				capture.output( { pbrk <- .parboot.replicate(k) })
+				pbrk 
+			}
 		} else{
-			tds <- parallel::mclapply( 1:nreps, function(k) .parboot.replicate(k) 
+			tds <- parallel::mclapply( 1:nreps, function(k) {
+				capture.output( { pbrk <- .parboot.replicate(k) })
+				pbrk
+			}
 			, mc.cores = ncpu ) 
 		}
 	} else{
-		tds <- lapply( 1:nreps, function(k) .parboot.replicate( k) )
+		tds <- lapply( 1:nreps, function(k) {
+			capture.output( { pbrk <- .parboot.replicate(k) })
+			pbrk
+		})
 	}
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
@@ -195,6 +216,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=T, over
 #' @export 
 boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=F, parallel_foreach = FALSE )
 {
+	k = 0 # resolve NOTE about 'visible binding for global variable'
 	nreps <- length(tres )
 	if (quiet){
 		cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
@@ -251,14 +273,25 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 	if (ncpu > 1)
 	{
 		if (parallel_foreach){
-			require(foreach)
-			tds <- foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% .boot.replicate(k)
+			success = requireNamespace('foreach', quietly=TRUE)
+			if (!success) stop('*parallel_foreach* requires the `foreach` package. Stopping.')
+			`%dopar%` <- foreach::`%dopar%`
+			tds <- foreach::foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% {
+				 capture.output( { brk <- .boot.replicate(k) })
+				 brk 
+			}
 		} else{
-			tds <- parallel::mclapply( 1:nreps, function(k) .boot.replicate(k) 
+			tds <- parallel::mclapply( 1:nreps, function(k) {
+				capture.output( { brk <- .boot.replicate(k) })
+				brk 
+			}
 			, mc.cores = ncpu ) 
 		}
 	} else{
-		tds <- lapply( 1:nreps, function(k) .boot.replicate(k) )
+		tds <- lapply( 1:nreps, function(k) {
+			capture.output( { brk <- .boot.replicate(k) })
+			brk 
+		})
 	}
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
@@ -326,12 +359,12 @@ relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T , ncpu =1
 {
 	argnames <- names(list(...))
 	if ( 'strictClock'  %in% argnames) stop('Can not prespecify clock type *strictClock* for relaxed.clock.test. Quitting.')
-	td <- dater(..., strict=TRUE)
+	td <- dater(..., strictClock=TRUE)
 	pbtd <-  parboot( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
 	 , overrideClock = 'relaxed' , ncpu = ncpu )
 	cvci_null <- pbtd$coef_of_variation_CI
 	
-	tdrc <- dater(..., strict=FALSE)
+	tdrc <- dater(..., strictClock=FALSE)
 	clock <- 'strict'
 	if ( tdrc$coef_of_variation > cvci_null[2] ){
 		clock <- 'relaxed'
@@ -373,14 +406,15 @@ print.bootTreedater = print.boot.treedater <- function( x, ... )
 
 #' Plots lineages through time and confidence intervals estimated by bootstrap. 
 #'
-#' @param pbtd A bootTreedater object produced by *parboot* or *boot*
+#' @param x A bootTreedater object produced by *parboot* or *boot*
 #' @param t0 The lower bound of the time axis to show
 #' @param res The number of time points on the time axis
 #' @param ggplot If TRUE, will return a plot made with the ggplot2 package
 #' @param ... Additional arg's are passed to *ggplot* or *plot*
 #' @export 
-plot.bootTreedater <- function(pbtd, t0 = NA, res = 100, ggplot=FALSE, ... )
+plot.bootTreedater <- function(x, t0 = NA, res = 100, ggplot=FALSE, ... )
 {
+	pbtd = x
 	stopifnot(inherits(pbtd, "bootTreedater"))
 	t1 <- max( pbtd$td$sts, na.rm=T )
 	if (is.na(t0)) t0 <- min( sapply( pbtd$trees, function(tr) tr$timeOf ) )
@@ -392,12 +426,19 @@ plot.bootTreedater <- function(pbtd, t0 = NA, res = 100, ggplot=FALSE, ... )
 			), c('lb', 'median', 'ub') )
 		)
 	}))) -> ltt
+	
+	# resolve NOTE about 'no visible binding for global variables'
+	pml = NULL
+	ub = NULL 
+	lb = NULL
+	
 	pl.df <- as.data.frame( ltt )
 	if (ggplot){
-		require(ggplot2)
-		p <- ggplot( pl.df, ... ) + geom_ribbon( aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
-		p <- p + geom_path( aes(x = times, y = pml ))
-		return (p <- p + ylab( 'Lineages through time') + xlab('Time')  )
+		success = requireNamespace('ggplot2', quietly=TRUE)
+		if (!success) stop('*ggplot* option requires that the `ggplot2` package is installed. Stopping.')
+		p <- ggplot2::ggplot( pl.df, ... ) + ggplot2::geom_ribbon( ggplot2::aes(x = times, ymin = lb, ymax = ub ), fill='blue', col = 'blue', alpha = .1 )
+		p <- p + ggplot2::geom_path( ggplot2::aes(x = times, y = pml ))
+		return (p <- p + ggplot2::ylab( 'Lineages through time') + ggplot2::xlab('Time')  )
 	}
 	with( pl.df ,{
 		plot( times, lb, type = 'l', lty = 3, lwd = 1, xlab = 'Time', ylab= 'Lineages through time'#, main='' 
@@ -406,5 +447,3 @@ plot.bootTreedater <- function(pbtd, t0 = NA, res = 100, ggplot=FALSE, ... )
 		lines( times, pml, lwd = 2) 
 	})
 }
-#~ plot(pb)
-#~ require(devtools); build_vignettes()
