@@ -12,5 +12,4 @@ License: GPL
 Imports: ape
 Depends: limSolve
 Suggests: lubridate,ggplot2,foreach,iterators,mgcv,knitr,rmarkdown
-VignetteBuilder: knitr
 RoxygenNote: 6.0.1
