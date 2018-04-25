@@ -257,7 +257,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		}
 		lb <- max( tu, estimateSampleTimes[V,'lower'] )
 		ub <- max( tu, estimateSampleTimes[V, 'upper'] )
-		if (ub == tu & lb == tu) return(tu + td$minblen)
+		if (ub == tu & lb == tu) return(tu ) #+ td$minblen
 		o  <- optimise(  of, lower = lb, upper = ub )
 		o$minimum
 	})
@@ -306,13 +306,18 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
  , parallel_foreach = FALSE
  , lnd.mean.rate.prior = function(x) 0
  , tiplabel_est_samp_times = NULL
- , iedge_tiplabel_est_samp_times = NULL
- , EST_SAMP_TIMES  = FALSE
 )
 {
+	clsSolver <- match.arg( clsSolver) 
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
+	intree_rooted <- TRUE
+	if (!is.rooted(tre)) stop('Tree not rooted.')
+	
+	EST_SAMP_TIMES  = ifelse( is.null( tiplabel_est_samp_times ),  FALSE, TRUE)
+	iedge_tiplabel_est_samp_times <- match( tiplabel_est_samp_times, tre$tip.label[tre$edge[,2]] )
+	
 	if (is.na(omega0)){
 		# guess
 		#omega0 <- estimate.mu( tre, sts )
@@ -355,7 +360,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		iter <- 0
 		nEdges <- nrow(tre$edge)
 		omegas <- rep( omega0,  nEdges )
-		omega <- omega0 # TODO 
 		edge_lls <- NA
 		rv <- list()
 		while(!done){
@@ -397,14 +401,9 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 			}
 			
 			if (!quiet)
-			{
-				cat('iter, omegas, T, r, theta, logLik\n')
-				print(c( iter))
-				print(summary(omegas))
-				print(summary(Ti))
-				print( r)
-				print( gammatheta)
-				print( ll)
+			{ 
+				print( data.frame( iteration = iter, median_unadjusted_rate = median(omegas),  coef_of_var =  1 / sqrt(r) ), tmrca = min(Ti), logLik=ll , row.names=iter)
+				cat( '---\n' )
 			}
 			omega <- .mean.rate(Ti, r, gammatheta, omegas, td)
 			if ( ll >= lastll ){
@@ -571,7 +570,7 @@ dater <- function(tre, sts, s=1e3
  , maxit=100
  , abstol = .0001
  , searchRoot = 5
- , quiet = FALSE #TODO
+ , quiet = TRUE
  , temporalConstraints = TRUE
  , strictClock = FALSE
  , estimateSampleTimes = NULL
@@ -618,6 +617,7 @@ dater <- function(tre, sts, s=1e3
 	EST_SAMP_TIMES <- TRUE
 	EST_SAMP_TIMES_ERR <- 'estimateSampleTimes must specify a data frame with tip.label as row names and with columns `upper` and `lower`. You may also provide a named list of log density functions (improper priors for sample times).\n'
 	if (is.null(estimateSampleTimes)) EST_SAMP_TIMES <- FALSE
+	tiplabel_est_samp_times <- NULL 
 	if (EST_SAMP_TIMES){
 		if (class(estimateSampleTimes)=='data.frame'){
 			if ( !('lower' %in% colnames(estimateSampleTimes)) | !('upper' %in% colnames(estimateSampleTimes) ) ){
@@ -652,7 +652,7 @@ dater <- function(tre, sts, s=1e3
 	initial_st_should_impute <- setdiff( rownames(estimateSampleTimes), names(na.omit(sts)))
 	if (length( initial_st_should_impute ) > 0){
 		cat('NOTE: initial guess of sample times for following lineages was not provided:\n')
-		cat ( initial_st_should_impute )
+		cat ( initial_st_should_impute ) 
 		cat('\n') 
 		cat( 'Will proceed with midpoint of provided range as initial guess of these sample times.\n')
 		sts[initial_st_should_impute] <- rowMeans( estimateSampleTimes )[initial_st_should_impute] 
@@ -666,7 +666,7 @@ dater <- function(tre, sts, s=1e3
 	
 	if (is.na(minblen)){
 		minblen <- diff(range(sts))/ length(sts) / 10 #TODO choice of this parm is difficult, may require sep optim / crossval
-		cat(paste0('Note: Minimum temporal branch length set to ', minblen, '. Increase this value in the event of convergence failures. \n'))
+		cat(paste0('Note: Minimum temporal branch length  (*minblen*) set to ', minblen, '. Increase *minblen* in the event of convergence failures. \n'))
 	}
 	if (!is.na(omega0) & numStartConditions > 0 ){
 		warning('omega0 provided incompatible with numStartConditions > 0. Setting numStartConditions to zero.')
@@ -692,8 +692,6 @@ dater <- function(tre, sts, s=1e3
 						, meanRateLimits = meanRateLimits
 						, lnd.mean.rate.prior =  lnd.mean.rate.prior 
 						, tiplabel_est_samp_times = tiplabel_est_samp_times
-						, iedge_tiplabel_est_samp_times = iedge_tiplabel_est_samp_times
-						, EST_SAMP_TIMES  = EST_SAMP_TIMES
 						) 
 				}
 			} else{
@@ -706,8 +704,6 @@ dater <- function(tre, sts, s=1e3
 						, meanRateLimits = meanRateLimits
 						, lnd.mean.rate.prior =  lnd.mean.rate.prior 
 						, tiplabel_est_samp_times = tiplabel_est_samp_times
-						, iedge_tiplabel_est_samp_times = iedge_tiplabel_est_samp_times
-						, EST_SAMP_TIMES  = EST_SAMP_TIMES
 						) 
 				}, mc.cores = ncpu )
 			}
@@ -721,8 +717,6 @@ dater <- function(tre, sts, s=1e3
 					, meanRateLimits = meanRateLimits
 					, lnd.mean.rate.prior = lnd.mean.rate.prior 
 					, tiplabel_est_samp_times = tiplabel_est_samp_times
-					, iedge_tiplabel_est_samp_times = iedge_tiplabel_est_samp_times
-					, EST_SAMP_TIMES  = EST_SAMP_TIMES
 					) 
 			})
 		}
@@ -742,8 +736,6 @@ dater <- function(tre, sts, s=1e3
 		, meanRateLimits = meanRateLimits
 		, lnd.mean.rate.prior = lnd.mean.rate.prior 
 		, tiplabel_est_samp_times = tiplabel_est_samp_times
-		, iedge_tiplabel_est_samp_times = iedge_tiplabel_est_samp_times
-		, EST_SAMP_TIMES  = EST_SAMP_TIMES
 	)
 }
 

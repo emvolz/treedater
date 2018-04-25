@@ -10,7 +10,7 @@
 #' dater
 #' outlier.tips
 #' @export
-outlierLineages <- function(td, alpha = .01, type=c('tips','internal', 'all')){
+outlierLineages <- function(td, alpha = .05, type=c('tips','internal', 'all')){
 	if (length(type)>1) type <- type[1]
 	if ( !td$temporalConstraints ){
 		stop('The outlier.tips function requires a treedater object fitted using temporalConstraints=TRUE. Quitting.')
@@ -93,6 +93,6 @@ outlierLineages <- function(td, alpha = .01, type=c('tips','internal', 'all')){
 #' dater
 #' outlier.lineages
 #' @export
-outlierTips <- function( td, alpha = .01){
-	outlierLineages(td, alpha = .01)
+outlierTips <- function( td, alpha = .05){
+	outlierLineages(td, alpha = alpha)
 }
