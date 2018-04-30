@@ -214,7 +214,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 #' @author Erik M Volz <erik.volz@gmail.com>
 #'
 #' @export 
-boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=F, parallel_foreach = FALSE )
+boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=FALSE, parallel_foreach = FALSE )
 {
 	k = 0 # resolve NOTE about 'visible binding for global variable'
 	nreps <- length(tres )

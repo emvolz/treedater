@@ -5,7 +5,7 @@
 \title{Estimate of confidence intervals of molecular clock parameters with user-supplied set of bootstrap trees}
 \usage{
 boot(td, tres, ncpu = 1, searchRoot = 1, overrideTempConstraint = TRUE,
-  overrideClock = NULL, quiet = TRUE, normalApproxTMRCA = F,
+  overrideClock = NULL, quiet = TRUE, normalApproxTMRCA = FALSE,
   parallel_foreach = FALSE)
 }
 \arguments{

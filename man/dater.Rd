@@ -69,13 +69,13 @@ sample times.}
 
 \item{numStartConditions}{Will attempt optimisation from more than one starting point if >0}
 
-\item{clsSolver}{Which package should be used for constrained least-squares? Options are _mgcv_ or _limSolve_}
+\item{clsSolver}{Which package should be used for constrained least-squares? Options are "mgcv" or "limSolve"}
 
 \item{meanRateLimits}{Optional constraints for the mean substitution rate}
 
 \item{ncpu}{Number of threads for parallel computing}
 
-\item{parallel_foreach}{If TRUE, will use the _foreach_ package instead of the _parallel_ package. This may work better on some HPC systems.}
+\item{parallel_foreach}{If TRUE, will use the "foreach" package instead of the "parallel" package. This may work better on some HPC systems.}
 }
 \value{
 A time-scaled tree and estimated molecular clock rate

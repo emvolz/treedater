@@ -8,8 +8,9 @@ Authors@R: c(person("Erik", "Volz", role = c("aut", "cre"),
 Author: Erik Volz [aut, cre]
 Maintainer: Erik Volz <erik.volz@gmail.com>
 Description: Fast molecular clock dating of phylogenetic trees with rate variation. 
-License: GPL
-Imports: ape
-Depends: limSolve
+License: GPL-2
+Imports: ape (>= 5.0)
+Depends: limSolve (>= 1.5.5.0)
 Suggests: lubridate,ggplot2,foreach,iterators,mgcv,knitr,rmarkdown
+VignetteBuilder: knitr
 RoxygenNote: 6.0.1

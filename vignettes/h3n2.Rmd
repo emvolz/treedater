@@ -124,14 +124,14 @@ tre2 <- ape::drop.tip( tre, rownames(outliers[outliers$q < 0.20,]) )
 Now we can rerun `dater` with the reduced tree:
 
 ```{r}
-(dtr2 <- dater(tre2, sts, seqlen, ncpu = 5) )
+(dtr2 <- dater(tre2, sts, seqlen, ncpu = 1) ) # increase ncpu to use parallel computing
 ```
 
 After removing the outliers, the coefficient of variation of rates is much lower, suggesting that a strict clock model may be appropriate for the reduced tree. We can test the suitability of the strict clock with this test: 
 
 
 ```{r}
-rct <- relaxedClockTest( tre2, sts, seqlen, ncpu = 6 ) 
+rct <- relaxedClockTest( tre2, sts, seqlen, ncpu = 1 ) # increase ncpu to use parallel computing
 ```
 
 Note that the `ncpu` option enabled parallel computing to speed up this test. 
@@ -155,11 +155,11 @@ Estimating confidence intervals for rates and dates is straightforward using a p
 
 ```{r}
 rt2 <- Sys.time()
-(pb <- parboot( dtr3, ncpu = 6) )
+(pb <- parboot( dtr3, ncpu = 1) )# increase ncpu to use parallel computing
 rt3 <- Sys.time()
 ```
 
-How fast was it? Note that the `ncpu` option enabled parallel computing. 
+How fast was it? Note that the `ncpu` option would enable parallel computing. 
 
 ```{r}
 rt3 - rt2 
