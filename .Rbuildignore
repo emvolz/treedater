@@ -1,0 +1,11 @@
+^_config\.yml$
+^\.\.Rcheck$
+^\.\.Rcheck/.*$
+^.git$
+^.*\.git$
+^.*\.git/.*$
+^figure$
+^pdftex$
+^pdflatex$
+^treedater_.*\.tar\.gz$
+^treedater\.Rcheck$
