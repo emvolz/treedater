@@ -563,19 +563,18 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #' ape::estimate.mu
 #'
 #' @examples
-#' \dontrun{
-#' 	## simulate a random tree and sample times for demonstration
-#'      # make a random tree
-#'      tre <- rtree(50)
-#'      # sample times based on distance from root to tip
-#'      sts <- setNames(  
-#'		  dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
-#'		, tre$tip.label)
-#'      # modify edge length to represent evolutionary distance with rate 1e-3
-#'      tre$edge.length <- tre$edge.length * 1e-3
-#'      # treedater: 
-#'      td <- dater( tre, sts =sts )
-#' }
+#' ## simulate a random tree and sample times for demonstration
+#' # make a random tree:
+#' tre <- ape::rtree(50)
+#' # sample times based on distance from root to tip:
+#' sts <- setNames(  
+#'   ape::dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
+#'   , tre$tip.label)
+#' # modify edge length to represent evolutionary distance with rate 1e-3:
+#' tre$edge.length <- tre$edge.length * 1e-3
+#' # treedater: 
+#' td <- dater( tre, sts =sts )
+#'
 #'
 #' @export 
 dater <- function(tre, sts, s=1e3
