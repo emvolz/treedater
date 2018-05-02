@@ -7,8 +7,8 @@ An uncorrelated relaxed molecular clock accounts for rate variation between line
 To cite:
 * E.M. Volz and Frost, S.D.W. (2017) [Scalable relaxed clock phylogenetic dating](https://doi.org/10.1093/ve/vex025). Virus Evolution.
 
-## installation
-`treedater` is not yet available in CRAN. You can install from github using the `devtools` package:
+## Installation
+You can install the latest development version from github using the `devtools` package:
 ```
 library(devtools)
 install_github( 'emvolz/treedater')
@@ -40,4 +40,6 @@ Usage: ./tdcl [-[-help|h] [<logical>]] [-[-treefn|t] <character>] [-[-samplefn|s
 -o <file>: name of file for saving output 
 ```
 Note that you may need to modify the first line of the `tdcl` script with the correct path to `Rscript` or `littler`.
+
+
 
