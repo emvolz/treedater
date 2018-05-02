@@ -8,7 +8,7 @@ To cite:
 * E.M. Volz and Frost, S.D.W. (2017) [Scalable relaxed clock phylogenetic dating](https://doi.org/10.1093/ve/vex025). Virus Evolution.
 
 
-## basic usage
+## Basic usage
 
 ```
 dater( tre, sts, s)
@@ -21,7 +21,7 @@ where
 
 For a detailed introduction to features available in `treedater`, see the [vignette](./inst/doc/h3n2.html). 
 
-## command line
+## Command line
 
 You can also use treedater from the command line without starting R using the `tdcl` script: 
 ```
