@@ -7,7 +7,7 @@ Authors@R: c(person("Erik", "Volz", role = c("aut", "cre"),
                      email = "erik.volz@gmail.com") )
 Author: Erik Volz [aut, cre]
 Maintainer: Erik Volz <erik.volz@gmail.com>
-Description: Fast molecular clock dating of phylogenetic trees with rate variation. 
+Description: Functions for estimating times of common ancestry and molecular clock rates of evolution using a variety of evolutionary models, parametric and nonparametric bootstrap confidence intervals, methods for detecting outlier lineages, and a statistical test for selecting molecular clock models. The methods are described in Volz, E.M. and S.D.W. Frost (2017) <doi:10.1093/ve/vex025>.
 License: GPL-2
 Imports: ape (>= 5.0)
 Depends: limSolve (>= 1.5.5.0)

@@ -1,3 +1,12 @@
+# Resubmission 2
+* Added more examples/tests, dater, parboot, boot, relaxedClockTest
+
+# Resubmission 1
+
+* Added more detail in the DESCRIPTION and a reference to the relevant publication 
+* Fixed the missing vignette index 
+* Enabled additional example for testing (dater)
+
 # R check results
 
 0 errors | 0 warnings | 1 note 

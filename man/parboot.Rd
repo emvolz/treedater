@@ -58,6 +58,23 @@ If the original treedater fit estimated the root position, root
      inspecting the output from each fitted treedater object, which is
      contained in the $trees attribute.
 }
+\examples{
+# make a random tree
+tre <- ape::rtree(25)
+# simulate sample times based on distance from root to tip:
+sts <- setNames(  
+ape::dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
+, tre$tip.label)
+# modify edge length to represent evolutionary distance with rate 1e-3:
+tre$edge.length <- tre$edge.length * 1e-3
+# treedater: 
+td <- dater( tre, sts =sts )
+# parametric bootstrap: 
+pb <- parboot( td, nreps=25 )
+# plot lineages through time
+plot( pb )
+
+}
 \seealso{
 dater
 boot

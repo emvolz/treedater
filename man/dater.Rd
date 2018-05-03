@@ -88,7 +88,8 @@ Estimates the calendar time of nodes in the given phylogenetic
 tree with branches in units of substitutions per site. The
 calendar time of each sample must also be specified and the length
 of the sequences used to estimate the tree. If the tree is not
-rooted, this function will estimate the root position.
+rooted, this function will estimate the root position. 
+For an introduction to all options and features, see the vignette on Influenza H3N2: vignette("h3n2")
 }
 \section{References}{
 
@@ -96,19 +97,18 @@ E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. V
 }
 
 \examples{
-\dontrun{
-	## simulate a random tree and sample times for demonstration
-     # make a random tree
-     tre <- rtree(50)
-     # sample times based on distance from root to tip
-     sts <- setNames(  
-	  dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
-	, tre$tip.label)
-     # modify edge length to represent evolutionary distance with rate 1e-3
-     tre$edge.length <- tre$edge.length * 1e-3
-     # treedater: 
-     td <- dater( tre, sts =sts )
-}
+## simulate a random tree and sample times for demonstration
+# make a random tree:
+tre <- ape::rtree(50)
+# sample times based on distance from root to tip:
+sts <- setNames(  
+  ape::dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
+  , tre$tip.label)
+# modify edge length to represent evolutionary distance with rate 1e-3:
+tre$edge.length <- tre$edge.length * 1e-3
+# treedater: 
+td <- dater( tre, sts =sts )
+
 
 }
 \seealso{

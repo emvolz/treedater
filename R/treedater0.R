@@ -501,7 +501,8 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #' tree with branches in units of substitutions per site. The
 #' calendar time of each sample must also be specified and the length
 #' of the sequences used to estimate the tree. If the tree is not
-#' rooted, this function will estimate the root position.
+#' rooted, this function will estimate the root position. 
+#' For an introduction to all options and features, see the vignette on Influenza H3N2: vignette("h3n2")
 #' 
 #' @section References:
 #' E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
@@ -796,85 +797,3 @@ with( td,
 	})
 }
 
-#~ gibbs.treedater <- function(dtr, iter = 1e3, burn_pc = 20, returnTrees = 10, res = 100 , report = 1) 
-#~ {
-#~ #TODO version that modifies 1) tip dates 2) root height 
-#~ 	# dtr : a treedater fit
-#~ 	n <- length( dtr$tip )
-#~ 	t <- c( dtr$sts[dtr$intree$tip.label] , dtr$Ti ) # current state
-#~ 	sampleOrderNodes <- sample( (n+1):(n + dtr$Nnode),  replace=F) # order of nodes to sample 
-	
-#~ 	td <- .make.tree.data (  dtr$intree, dtr$sts, dtr$s, cc = 10) 
-#~ 	td$minblen <- dtr$minblen #ugly 
-	
-#~ 	nodes <- 1:(n + dtr$Nnode)
-#~ 	node2edgei_list  <- lapply( nodes, function(x){
-#~ 		which( dtr$intree$edge[,2] == x )
-#~ 	})
-	
-#~ 	.sample.ti <- function(node )
-#~ 	{
-#~ 		# a sample/importance/resample algorithm with uniform proposal 
-#~ 		dgtrs <- td$daughters[node, ]
-#~ 		a <- td$parent[ node ]
-#~ 		if (any(is.na( c( dgtrs, a )))) return(NA)
-#~ 		b1 <- td$tre$edge.length[ node2edgei_list[[dgtrs[1]]] ]
-#~ 		b2 <- td$tre$edge.length[ node2edgei_list[[dgtrs[2]]] ]
-#~ 		b3 <- td$tre$edge.length[ node2edgei_list[[ node  ]] ]
-		
-#~ 		tub <- min( t[dgtrs ] )
-#~ 		tlb <- t[ a ]
-#~ 		if ( tlb == tub ) return( NA ) 
-		
-#~ 		#tx <- seq( tlb, tub, l = 100 ) #TODO can probs do better than this 
-#~ 		tx <- runif( res , tlb , tub )
-		
-#~ 		# vectorised: 
-#~ 		u1s <-  t[ dgtrs[1] ] - tx
-#~ 		u2s <-  t[ dgtrs[2] ] - tx
-#~ 		u3s <-  tx-t[a]
-		
-#~ 		p1s <- dtr$theta * u1s / ( 1 + dtr$theta * u1s )
-#~ 		p2s <- dtr$theta * u2s / ( 1 + dtr$theta * u2s )
-#~ 		p3s <- dtr$theta * u3s / ( 1 + dtr$theta * u3s )
-		
-#~ 		lls <- dnbinom( round( b1 * dtr$s ) , dtr$r, 1 - p1s , log = TRUE ) + 
-#~ 			dnbinom( round(b2 * dtr$s), dtr$r , 1 - p2s, log =T ) + 
-#~ 			dnbinom( round(b3 * dtr$s), dtr$r, 1 - p3s , log =T )
-#~ 		lls[is.na(lls)] <- -Inf
-#~ 		if (max(lls)==-Inf) return(NA)
-#~ 		w <- exp( lls - max( lls )  ) 
-#~ 		if (sum(w)==0) {
-#~ 			warning('All sample weights zero')
-#~ 			return( NA )
-#~ 		}
-#~ 		tx [ sample(1:length(tx), size = 1, prob= w )]
-#~ 	}
-	
-#~ 	X <- matrix( NA, nrow = length(t), ncol = iter)
-#~ 	for (i in 1:iter){
-#~ 		for ( node in sampleOrderNodes ){
-#~ 			ti <- .sample.ti( node )
-#~ 			if (!is.na( ti )) t[node] <- ti
-#~ 		}
-#~ 		X[, i] <- t
-		
-#~ 		if ( i %% report  == 0 ){
-#~ 			print( paste( i, Sys.time() )  )
-#~ 		}
-#~ 	}
-	
-#~ 	# burn & sample t's 
-#~ 	ix <- round( seq( floor( burn_pc * iter/100), iter, l = returnTrees ) )
-#~ 	X <- X[ , ix ] 
-	
-#~ 	# return daters 
-#~ 	lapply( 1:ncol(X), function(i){
-#~ 		t <- X[, i ]
-#~ 		Ti <- t[ (n+1):(n + dtr$Nnode ) ]
-#~ 		dtr$Ti <- Ti
-#~ 		dtr$edge.length <- .Ti2blen(Ti, td )
-#~ 		dtr
-#~ 	})
-	
-#~ }

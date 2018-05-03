@@ -51,6 +51,22 @@
 #'
 #' @author Erik M Volz <erik.volz@gmail.com>
 #'
+#' @examples
+#' # make a random tree
+#' tre <- ape::rtree(25)
+#' # simulate sample times based on distance from root to tip:
+#' sts <- setNames(  
+#' ape::dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
+#' , tre$tip.label)
+#' # modify edge length to represent evolutionary distance with rate 1e-3:
+#' tre$edge.length <- tre$edge.length * 1e-3
+#' # treedater: 
+#' td <- dater( tre, sts =sts )
+#' # parametric bootstrap: 
+#' pb <- parboot( td, nreps=25 )
+#' # plot lineages through time
+#' plot( pb )
+#'
 #' @export 
 parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=FALSE, parallel_foreach = FALSE )
 {
@@ -213,6 +229,29 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 #'
 #' @author Erik M Volz <erik.volz@gmail.com>
 #'
+#' @examples 
+#' # simulate a tree 
+#' tre <- ape::rtree(25)
+#' # sample times based on distance from root to tip:
+#' sts <- setNames(  
+#' ape::dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
+#' , tre$tip.label)
+#' # make a list of trees that simulate outcome of bootstrap using nonparametric phylogeny estimation
+#' # also modify edge length to represent evolutionary distance with rate 1e-3:
+#' bootTrees <- lapply( 1:25, function(i) {
+#' 	.tre <- tre
+#' 	.tre$edge.length <- tre$edge.length * pmax(rnorm( length(tre$edge.length), 1e-3, 1e-4 ), 0 )
+#' 	.tre 
+#' })
+#' tre$edge.length <- tre$edge.length * 1e-3
+#' # run treedater
+#' td <- dater( tre, sts  )
+#' # bootstrap: 
+#' ( tdboot <- boot( td, bootTrees ) )
+#' # plot lineages through time :
+#' plot( tdboot )
+#'
+#'
 #' @export 
 boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=FALSE, parallel_foreach = FALSE )
 {
@@ -353,6 +392,18 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 #' }
 #'
 #' @author Erik M Volz <erik.volz@gmail.com>
+#'
+#' @examples 
+#' # simulate a tree 
+#' tre <- ape::rtree(25)
+#' # sample times based on distance from root to tip:
+#' sts <- setNames(  
+#' ape::dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
+#' , tre$tip.label)
+#' # modify edge length to represent evolutionary distance with rate 1e-3:
+#' tre$edge.length <- tre$edge.length * 1e-3
+#' relaxedClockTest( tre, sts, nreps=25)
+#'
 #'
 #' @export 
 relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T , ncpu =1 )

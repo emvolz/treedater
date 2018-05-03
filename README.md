@@ -25,7 +25,7 @@ where
 * `sts` is a named vector of sample times for each tip in `tre`
 * `s` is the length of the genetic sequences used to estimate `tre`
 
-For a detailed introduction to features available in `treedater`, see the [vignette](./inst/doc/h3n2.html). 
+For a detailed introduction to features available in `treedater`, see the vignette on analysis of Influena H3N2: `vignette('h3n2')`. 
 
 ## Command line
 
