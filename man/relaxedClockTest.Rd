@@ -4,7 +4,8 @@
 \alias{relaxedClockTest}
 \title{Use parametric bootstrap to test if relaxed clock offers improved fit to data.}
 \usage{
-relaxedClockTest(..., nreps = 100, overrideTempConstraint = T, ncpu = 1)
+relaxedClockTest(..., nreps = 100, overrideTempConstraint = T,
+  ncpu = 1)
 }
 \arguments{
 \item{...}{arguments passed to *dater*}

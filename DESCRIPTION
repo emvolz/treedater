@@ -13,4 +13,4 @@ Imports: ape (>= 5.0)
 Depends: limSolve (>= 1.5.5.0)
 Suggests: lubridate,ggplot2,foreach,iterators,mgcv,knitr,rmarkdown
 VignetteBuilder: knitr
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.0

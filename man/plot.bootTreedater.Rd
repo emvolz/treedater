@@ -4,7 +4,8 @@
 \alias{plot.bootTreedater}
 \title{Plots lineages through time and confidence intervals estimated by bootstrap.}
 \usage{
-\method{plot}{bootTreedater}(x, t0 = NA, res = 100, ggplot = FALSE, ...)
+\method{plot}{bootTreedater}(x, t0 = NA, res = 100, ggplot = FALSE,
+  cumulative = FALSE, ...)
 }
 \arguments{
 \item{x}{A bootTreedater object produced by *parboot* or *boot*}
@@ -14,6 +15,8 @@
 \item{res}{The number of time points on the time axis}
 
 \item{ggplot}{If TRUE, will return a plot made with the ggplot2 package}
+
+\item{cumulative}{If TRUE, will show only decreasing lineages through time}
 
 \item{...}{Additional arg's are passed to *ggplot* or *plot*}
 }

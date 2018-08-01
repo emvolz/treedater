@@ -4,8 +4,8 @@
 \alias{sampleYearsFromLabels}
 \title{Compute a vector of numeric sample times from labels in a sequence aligment or phylogeny}
 \usage{
-sampleYearsFromLabels(tips, dateFormat = "\%Y-\%m-\%d", delimiter = NULL,
-  index = NULL, regex = NULL)
+sampleYearsFromLabels(tips, dateFormat = "\%Y-\%m-\%d",
+  delimiter = NULL, index = NULL, regex = NULL)
 }
 \arguments{
 \item{tips}{A character vector supplying the name of each sample}
