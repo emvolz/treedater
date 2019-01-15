@@ -739,11 +739,12 @@ dater <- function(tre, sts, s=1e3
 		lls <- sapply( tds, function(td) td$loglik )
 		td <- tds [[ which.max( lls ) ]]
 		td$intree_rooted <- FALSE
+		.fitDiagnostics ( td )
 		return ( td )
 	} else{
 		cat( 'Tree is rooted. Not estimating root position.\n')
 	}
-	.dater( tre, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
+	td = .dater( tre, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
 		, strictClock = strictClock, temporalConstraints = temporalConstraints
 		, quiet = quiet
 		, estimateSampleTimes = estimateSampleTimes
@@ -753,10 +754,14 @@ dater <- function(tre, sts, s=1e3
 		, lnd.mean.rate.prior = lnd.mean.rate.prior 
 		, tiplabel_est_samp_times = tiplabel_est_samp_times
 	)
+	.fitDiagnostics ( td )
+	return( td )
 }
 
 #' @export 
 print.treedater <- function(x, ...){
+	.fitDiagnostics( x )
+	
     cl <- oldClass(x)
     oldClass(x) <- cl[cl != "treedater"]
     print(x$intree)
@@ -795,5 +800,46 @@ with( td,
 		plot( 1:length(edge.p)/length(edge.p), sort (edge.p ) , type = 'l', xlab='Theoretical quantiles', ylab='Edge p value', xlim = c(0,1), ylim = c(0,1)); 
 		abline( a = 0, b = 1 )
 	})
+}
+
+# help message when model fit is poor 
+.TROUBLESHOOT0 <- '
+The following steps may help to fix or alleviate common problems: 
+* Check that the vector of sample times is correctly named, or in the correct order, and that the units are correct. 
+* If passing a rooted tree, make sure that the root position was chosen correctly, or estimate the root position by passing an unrooted tree (e.g. pass ape::unroot(tree))
+* The root position may be poorly estimated. Try increasing the _searchRoot_ parameter in order to test more lineages as potential root positions. 
+* The model may be fitted by a relaxed or strict molecular clock. Try changing the _strictClock_ parameter 
+* A poor fit may be due to a small number of lineages with unusual / outlying branch lengths which can occur due to sequencing error or poor alignment. Try the *outlierTips* command to identify and remove these lineages. 
+* Check that there is adequate variance in sample times in order to estimate a molecular clock by doing a root-to-tip regression. If the clock rate can not be reliably estimated, you can fix the value to a range using the _meanRateLimits_ option which would estimate a time tree given the previous estimate of clock rates. 
+'
+
+#' Check for common problems in treedater fit and suggest solutions if applicable 
+.fitDiagnostics <- function( td ){
+	stopifnot(inherits(td, "treedater"))
+	p <- td$edge.p 
+	cv <- td$coef_of_variation
+	cvprob = FALSE
+	pprob = FALSE
+	if (cv > 1 ){
+		cat('
+NOTE: The estimated coefficient of variation of clock rates is high (>1). Sometimes this indicates a poor fit and/or a problem with the data.
+		\n')
+		cvprob <- TRUE 
+	}
+	if ( require( harmonicmeanp) ){
+	  pp <- p.hmp( p )
+	} else {
+	  pp <- min( p.adjust( p, 'BH' ))
+	}
+	
+	if ( pp < .025 ){
+		pprob <-  TRUE 
+		cat( '
+NOTE: The p values for lineage clock rates show at least one outlying value after adjusting for multiple-testing.  This indicates a poor fit to the data for at least a portion of the phylogenetic tree. To visualize the distribution p-values, use *goodnessOfFitPlot*. 
+		\n')
+	}
+	if (pprob | cvprob ){
+		cat( .TROUBLESHOOT0 )
+	}
 }
 
