@@ -792,7 +792,7 @@ goodnessOfFitPlot <- function(td)
 	stopifnot(inherits(td, "treedater"))
 with( td, 
 	{
-		plot( 1:length(edge.p)/length(edge.p), sort (edge.p ) , type = 'l', xlab='Theoretical quantiles', ylab='Edge p value'); 
+		plot( 1:length(edge.p)/length(edge.p), sort (edge.p ) , type = 'l', xlab='Theoretical quantiles', ylab='Edge p value', xlim = c(0,1), ylim = c(0,1)); 
 		abline( a = 0, b = 1 )
 	})
 }
