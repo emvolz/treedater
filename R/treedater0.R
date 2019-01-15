@@ -808,7 +808,7 @@ The following steps may help to fix or alleviate common problems:
 * The root position may be poorly estimated. Try increasing the _searchRoot_ parameter in order to test more lineages as potential root positions. 
 * The model may be fitted by a relaxed or strict molecular clock. Try changing the _strictClock_ parameter 
 * A poor fit may be due to a small number of lineages with unusual / outlying branch lengths which can occur due to sequencing error or poor alignment. Try the *outlierTips* command to identify and remove these lineages. 
-* Check that there is adequate variance in sample times in order to estimate a molecular clock by doing a root-to-tip regression. If the clock rate can not be reliably estimated, you can fix the value to a range using the _meanRateLimits_ option which would estimate a time tree given the previous estimate of clock rates. 
+* Check that there is adequate variance in sample times in order to estimate a molecular clock by doing a root-to-tip regression. Try the *rootToTipRegressionPlot* command. If the clock rate can not be reliably estimated, you can fix the value to a range using the _meanRateLimits_ option which would estimate a time tree given the previous estimate of clock rates. 
 '
 
 #' Check for common problems in treedater fit and suggest solutions if applicable 
