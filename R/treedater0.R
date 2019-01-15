@@ -568,9 +568,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #' # make a random tree:
 #' tre <- ape::rtree(50)
 #' # sample times based on distance from root to tip:
-#' sts <- setNames(  
-#'   ape::dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
-#'   , tre$tip.label)
+#' sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
 #' # modify edge length to represent evolutionary distance with rate 1e-3:
 #' tre$edge.length <- tre$edge.length * 1e-3
 #' # treedater: 
@@ -805,7 +803,7 @@ with( td,
 # help message when model fit is poor 
 .TROUBLESHOOT0 <- '
 The following steps may help to fix or alleviate common problems: 
-* Check that the vector of sample times is correctly named, or in the correct order, and that the units are correct. 
+* Check that the vector of sample times is correctly named and that the units are correct. 
 * If passing a rooted tree, make sure that the root position was chosen correctly, or estimate the root position by passing an unrooted tree (e.g. pass ape::unroot(tree))
 * The root position may be poorly estimated. Try increasing the _searchRoot_ parameter in order to test more lineages as potential root positions. 
 * The model may be fitted by a relaxed or strict molecular clock. Try changing the _strictClock_ parameter 
@@ -843,3 +841,51 @@ NOTE: The p values for lineage clock rates show at least one outlying value afte
 	}
 }
 
+
+#' Plot evolutionary distance from root to sample times and estimated internal node times and regression lines
+#' 
+#' If a range of sample times was given, these will be estimated. Red and black respectively indicate sample and internal nodes. 
+#' This function will print statistics computed from the linear regression model. 
+#' 
+#' @param td A fitted treedater object 
+#' @param ... Additional arguments are passed to plot
+#' @return The fitted linear model (class 'lm')
+#' @examples
+#' ## simulate a random tree and sample times for demonstration
+#' # make a random tree:
+#' tre <- ape::rtree(50)
+#' # sample times based on distance from root to tip:
+#' sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
+#' # modify edge length to represent evolutionary distance with rate 1e-3:
+#' tre$edge.length <- tre$edge.length * 1e-3
+#' # treedater: 
+#' td <- dater( tre, sts =sts )
+#' # root to tip regression: 
+#' fit = rootToTipRegressionPlot( td )
+#' summary(fit)
+#' 
+#' @export 
+rootToTipRegressionPlot <- function(td, ... ){
+	stopifnot( inherits( td, 'treedater'))
+	dT <- ape::node.depth.edgelength( td  )
+	dG <- ape::node.depth.edgelength( td$intree )
+	#scatter.smooth( dT, dG )
+	sts <- (td$timeOfMRCA+dT[1:ape::Ntip(td)])
+	nts <- (td$timeOfMRCA+dT)
+	mtip  <- lm( dG[1:ape::Ntip(td)] ~ sts )
+	mall  <- lm( dG ~ nts )
+	plot( dT + td$timeOfMRCA, dG
+	  , col = c(rep('red', ape::Ntip(td)), rep('black', ape::Nnode(td) ) )  
+	  , xlab = '' 
+	  , ylab = 'Evolutionary distance'
+	  , ... 
+	)
+	abline( a = coef(mtip)[1], b = coef(mtip)[2], col = 'red' ) 
+	abline( a = coef(mall)[1], b = coef(mall)[2], col = 'black' ) 
+	smtip <- summary( mtip )
+	cat(paste( 'Root-to-tip mean rate:', coef(mtip)[2], '\n'))
+	cat(paste( 'Root-to-tip p value:', smtip$coefficients[2, 4 ], '\n'))
+	cat(paste( 'Root-to-tip R squared (variance explained):', smtip$r.squared, '\n'))
+	cat('Returning fitted linear model.\n')
+	invisible(mtip)
+}

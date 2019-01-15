@@ -102,7 +102,12 @@ The `dtr` object extends `ape::phylo`, so most of the methods that you can use i
 plot( dtr , no.mar=T, cex = .2 )
 ```
 
-It looks like there are a couple of recent lineages that dont seem to fit well with the ladder-like topology. We will examine this in the next section. 
+It looks like there are a couple of recent lineages that dont seem to fit well with the ladder-like topology. 
+We can further examine this by doing a root-to-tip regression using the fitted tree and estimated node times which also shows a couple of outliers:
+```{r}
+rootToTipRegressionPlot( dtr )
+```
+It is always a good idea to visualize these distances to ensure that there is enough 'clock signal' in the data to reliably estimate rates and dates.  We will examine these outliers in the next section. 
 
 
 

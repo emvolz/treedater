@@ -52,9 +52,7 @@ If the original treedater fit estimated the root position, root
 # simulate a tree 
 tre <- ape::rtree(25)
 # sample times based on distance from root to tip:
-sts <- setNames(  
-ape::dist.nodes( tre)[(length(tre$tip.label)+1), 1:(length(tre$tip.label)+1)]
-, tre$tip.label)
+sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
 # make a list of trees that simulate outcome of bootstrap using nonparametric phylogeny estimation
 # also modify edge length to represent evolutionary distance with rate 1e-3:
 bootTrees <- lapply( 1:25, function(i) {
