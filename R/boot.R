@@ -497,10 +497,10 @@ plot.bootTreedater <- function(x, t0 = NA, res = 100, ggplot=FALSE, cumulative=F
 		return (p <- p + ggplot2::ylab( 'Lineages through time') + ggplot2::xlab('Time')  )
 	}
 	with( pl.df ,{
-		plot( times, lb, type = 'l', lty = 3, lwd = 1, xlab = 'Time', ylab= 'Lineages through time'#, main='' 
+		graphics::plot( times, lb, type = 'l', lty = 3, lwd = 1, xlab = 'Time', ylab= 'Lineages through time'#, main='' 
 		  , ylim = c(0, max(ub)+1)  , ...)
-		lines( times, ub, lty = 3, lwd = 1)
-		lines( times, pml, lwd = 2) 
+		graphics::lines( times, ub, lty = 3, lwd = 1)
+		graphics::lines( times, pml, lwd = 2) 
 	})
 }
 

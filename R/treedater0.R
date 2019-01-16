@@ -795,7 +795,7 @@ goodnessOfFitPlot <- function(td)
 	stopifnot(inherits(td, "treedater"))
 with( td, 
 	{
-		plot( 1:length(edge.p)/length(edge.p), sort (edge.p ) , type = 'l', xlab='Theoretical quantiles', ylab='Edge p value', xlim = c(0,1), ylim = c(0,1)); 
+		graphics::plot( 1:length(edge.p)/length(edge.p), sort (edge.p ) , type = 'l', xlab='Theoretical quantiles', ylab='Edge p value', xlim = c(0,1), ylim = c(0,1)); 
 		abline( a = 0, b = 1 )
 	})
 }
@@ -811,7 +811,7 @@ The following steps may help to fix or alleviate common problems:
 * Check that there is adequate variance in sample times in order to estimate a molecular clock by doing a root-to-tip regression. Try the *rootToTipRegressionPlot* command. If the clock rate can not be reliably estimated, you can fix the value to a range using the _meanRateLimits_ option which would estimate a time tree given the previous estimate of clock rates. 
 '
 
-#' Check for common problems in treedater fit and suggest solutions if applicable 
+# Check for common problems in treedater fit and suggest solutions if applicable 
 .fitDiagnostics <- function( td ){
 	stopifnot(inherits(td, "treedater"))
 	p <- td$edge.p 
@@ -824,8 +824,9 @@ NOTE: The estimated coefficient of variation of clock rates is high (>1). Someti
 		\n')
 		cvprob <- TRUE 
 	}
-	if ( require( harmonicmeanp) ){
-	  pp <- p.hmp( p )
+	success = requireNamespace('harmonicmeanp', quietly=TRUE)
+	if ( success ){
+	  pp <- harmonicmeanp::p.hmp( p )
 	} else {
 	  pp <- min( p.adjust( p, 'BH' ))
 	}
@@ -874,14 +875,14 @@ rootToTipRegressionPlot <- function(td, ... ){
 	nts <- (td$timeOfMRCA+dT)
 	mtip  <- lm( dG[1:ape::Ntip(td)] ~ sts )
 	mall  <- lm( dG ~ nts )
-	plot( dT + td$timeOfMRCA, dG
+	graphics::plot( dT + td$timeOfMRCA, dG
 	  , col = c(rep('red', ape::Ntip(td)), rep('black', ape::Nnode(td) ) )  
 	  , xlab = '' 
 	  , ylab = 'Evolutionary distance'
 	  , ... 
 	)
-	abline( a = coef(mtip)[1], b = coef(mtip)[2], col = 'red' ) 
-	abline( a = coef(mall)[1], b = coef(mall)[2], col = 'black' ) 
+	graphics::abline( a = coef(mtip)[1], b = coef(mtip)[2], col = 'red' ) 
+	graphics::abline( a = coef(mall)[1], b = coef(mall)[2], col = 'black' ) 
 	smtip <- summary( mtip )
 	cat(paste( 'Root-to-tip mean rate:', coef(mtip)[2], '\n'))
 	cat(paste( 'Root-to-tip p value:', smtip$coefficients[2, 4 ], '\n'))
