@@ -127,7 +127,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		if (is.infinite(r) | is.infinite(gammatheta)) return(Inf)
 		ps <- pmin(1 - 1e-5, gammatheta*blen / ( 1+ gammatheta * blen ) )
 		ov <- -sum( dnbinom( pmax(0, round(td$tre$edge.length*td$s))
-		  , size= r, prob=1-ps,  log = T) )
+		  , size= r, prob=1-ps,  log = TRUE) )
 		mr <-  r * gammatheta / td$s # Note this value will differ slightly from output of .mean.rate
 		ov <- ov - unname(lnd.mean.rate.prior( mr ))
 		ov 
@@ -139,6 +139,36 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	r <- unname( exp( o$par['lnr'] ))
 	gammatheta <- unname( exp( o$par['lngammatheta'] ))
 	list( r = r, gammatheta=gammatheta, ll = -o$value)
+}
+
+# additive varianc model of x didelot  
+.optim.nbinom1 <- function(  Ti, mu0, sp0, td, lnd.mean.rate.prior)
+{	
+	blen <- .Ti2blen( Ti, td )
+	
+	#NOTE relative to wikipedia page on NB:
+	#size = r
+	#1-prob = p
+	of <- function(x)
+	{
+		sp <- exp( x[ 'lnsp' ] )
+		mu <- exp( x['lnmu'] )
+		if (is.infinite(sp) | is.infinite(mu)) return(Inf)
+		sizes <- mu * blen / sp 
+		ov <- -sum( dnbinom( pmax(0, round(td$tre$edge.length*td$s))
+		  , size = sizes
+		  , prob = 1 - sp / ( 1+sp ),  log = TRUE) )
+		ov <- ov - unname(lnd.mean.rate.prior( mu ))
+		ov 
+	}
+	x0 <- c( lnmu = unname(log(mu0)), lnsp = unname( log(sp0)))
+	#o <- optim( par = x0, fn = of, method = 'BFGS' )
+	if ( is.infinite( of( x0 )) ) stop( 'Can not optimize rate parameters from initial conditions. Try adjusting *meanRateLimits*.' )
+	o <- optim( par = x0, fn = of)
+	mu <- unname( exp( o$par['lnmu'] ))
+	sp <- unname( exp( o$par['lnsp'] ))
+browser()
+	list( mu = mu, sp = sp, ll = -o$value)
 }
 
 .optim.omega.poisson0 <- function(Ti, omega0, td, lnd.mean.rate.prior, meanRateLimits)
@@ -251,6 +281,25 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 }
 
 
+# using additive relaxed clock model 
+.optim.omegas.gammaPoisson2 <- function( Ti, mu, sp , td )
+{
+	blen <- .Ti2blen( Ti, td )
+	o <- sapply( 1:nrow( td$tre$edge ), function(k) {
+		tau <- blen[k] 
+		x <- (td$tre$edge.length[k]*td$s)
+		lb <- qgamma(1e-6,  shape= mu*tau/sp , scale = sp / tau )
+		lam_star <- max(lb
+		 , (mu*tau - sp + x * sp)  /  (sp + tau ) 
+		)
+		ll <- dpois( max(0, round(x)),lam_star, log=T )  + 
+		 dgamma(lam_star, shape=mu*tau/sp , scale = sp/tau , log = T)
+		c( lam_star / tau / td$s, ll )
+	})
+#~ browser()
+	list( omegas = o[1,] , ll = unname( sum( o[2,] )), lls = unname(o[2,] ) )
+}
+
 .optim.sampleTimes0 <- function( Ti, omegas, estimateSampleTimes, estimateSampleTimes_densities, td, iedge_tiplabel_est_samp_times )
 {
 	blen <- .Ti2blen( Ti, td )
@@ -309,6 +358,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
  , quiet = TRUE
  , temporalConstraints = TRUE
  , strictClock = FALSE
+ , relaxedClockModel = c( 'uncorrelated', 'additive' )
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
  , numStartConditions = 0
@@ -321,6 +371,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 )
 {
 	clsSolver <- match.arg( clsSolver) 
+	relaxedClockModel <- match.arg( relaxedClockModel ) 
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
@@ -366,6 +417,8 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		# initial gamma parms with small variance
 		r = r0 <- ifelse(strictClock, Inf, sqrt(10))  #sqrt(r) = 10 
 		gammatheta = gammatheta0 <- ifelse(strictClock, omega0, omega0 * td$s / r0)
+		mu = omega0  * td$s
+		sp = 1e-2
 		
 		done <- FALSE
 		lastll <- -Inf
@@ -377,6 +430,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		while(!done){
 			if (temporalConstraints){
 				if (clsSolver=='limSolve'){
+#~ browser()
 					Ti <- tryCatch( .optim.Ti5.constrained.limsolve ( omegas, td ) 
 					 , error = function(e) .optim.Ti2( omegas, td)  )
 				} else{
@@ -395,11 +449,30 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 				edge_lls <- 0
 				omegas <- rep( gammatheta, length(omegas))
 			} else{
-				o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td, lnd.mean.rate.prior )
-				r <- o$r
-				ll <- o$ll
-				gammatheta <- o$gammatheta
-				oo <- .optim.omegas.gammaPoisson1( Ti, o$r, o$gammatheta, td ) 
+				if (relaxedClockModel == 'uncorrelated')
+				{
+					o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td, lnd.mean.rate.prior )
+					r <- o$r
+					ll <- o$ll
+					gammatheta <- o$gammatheta
+					oo <- .optim.omegas.gammaPoisson1( Ti, o$r, o$gammatheta, td )
+				} else if (relaxedClockModel=='additive'){
+					o <- .optim.nbinom1( Ti, mu, sp, td, lnd.mean.rate.prior )
+					mu = o$mu 
+					sp = o$sp 
+					ll = o$ll 
+					oo = .optim.omegas.gammaPoisson2( Ti, mu, sp , td )
+
+o2 <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td, lnd.mean.rate.prior )
+r <- o2$r
+ll <- o2$ll
+gammatheta <- o2$gammatheta
+oo2 <- .optim.omegas.gammaPoisson1( Ti, o2$r, o2$gammatheta, td )
+omegas2 <- oo2$omegas
+				} else{
+					stop('invalid value for *relaxedClockModel*')
+				}
+				# TODO additive version  
 				edge_lls <- oo$lls
 				omegas <- oo$omegas
 			}
@@ -417,7 +490,12 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 				print( data.frame( iteration = iter, median_unadjusted_rate = median(omegas),  coef_of_var =  1 / sqrt(r) ), tmrca = min(Ti), logLik=ll , row.names=iter)
 				cat( '---\n' )
 			}
-			omega <- .mean.rate(Ti, r, gammatheta, omegas, td)
+			if (relaxedClockModel == 'uncorrelated'){
+				omega <- .mean.rate(Ti, r, gammatheta, omegas, td)	
+			} else if ( relaxedClockModel == 'additive' ){
+				omega = mu 
+			}
+			# TODO omega <- ... additive 
 			if ( ll >= lastll ){
 				rv <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
 				 , meanRate = omega
@@ -461,7 +539,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	rv$sts <- sts
 	rv$minblen <- minblen
 	rv$intree <- tre #.tre
-	rv$coef_of_variation <- ifelse( is.numeric(rv$r), 1 / sqrt(rv$r), NA )
+	rv$coef_of_variation <- ifelse( is.numeric(rv$r), 1 / sqrt(rv$r), NA )  #  TODO for additive model 
 	rv$clock <- ifelse( is.infinite(rv$r), 'strict', 'relaxed')
 	rv$intree_rooted <- intree_rooted
 	rv$is_intree_rooted <- intree_rooted
@@ -473,15 +551,18 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	rv$numStartConditions <- numStartConditions
 	rv$lnd.mean.rate.prior <- lnd.mean.rate.prior
 	rv$meanRateLimits <- meanRateLimits
+	rv$relaxedClockModel = relaxedClockModel 
+	# TODO update calls from parboot and boot 
 	
 	# add pvals for each edge
 	if (rv$clock=='relaxed'){
+		# TODO for additive model also
 		rv$edge.p <- with(rv, {
-		blen <- pmax(minblen, edge.length)
-		ps <- pmin(1 - 1e-12, theta * blen/(1 + theta * blen))
-			pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
-				prob = 1 - ps)
-		})
+			blen <- pmax(minblen, edge.length)
+			ps <- pmin(1 - 1e-12, theta * blen/(1 + theta * blen))
+				pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
+					prob = 1 - ps)
+			})
 	} else{
 		rv$edge.p <- with(rv, {
 			blen <- pmax(minblen, edge.length)
@@ -536,6 +617,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #'        Note that execution is faster if this option is FALSE.
 #' @param strictClock If TRUE, will fit a Poisson evolutionary model without
 #'        rate variation.
+#' @param relaxedClockModel The type of relaxed clock model to use
 #' @param estimateSampleTimes If some sample times are not known with certainty,
 #'         bounds can be provided with this option. This should take the
 #'         form of a data frame with columns 'lower' and 'upper'
@@ -585,6 +667,7 @@ dater <- function(tre, sts, s=1e3
  , quiet = TRUE
  , temporalConstraints = TRUE
  , strictClock = FALSE
+ , relaxedClockModel = c( 'uncorrelated', 'additive' )
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
  , numStartConditions = 0
@@ -594,7 +677,8 @@ dater <- function(tre, sts, s=1e3
  , parallel_foreach = FALSE
 )
 { 
-	clsSolver <- match.arg( clsSolver) #clsSolver[1]	
+	clsSolver <- match.arg( clsSolver)
+	relaxedClockModel <- match.arg ( relaxedClockModel )	
 	if (!is.binary( tre ) ){
 		cat( 'Note: *dater* called with non binary tree. Will proceed after resolving polytomies.\n' )
 		if ( !is.rooted( tre )){
@@ -699,7 +783,9 @@ dater <- function(tre, sts, s=1e3
 				`%dopar%` <- foreach::`%dopar%`
 				tds <- foreach::foreach( t = iterators::iter( rtres )) %dopar% {
 					.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-						, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+						, strictClock = strictClock
+						, relaxedClockModel = relaxedClockModel
+						, temporalConstraints = temporalConstraints, quiet = quiet
 						, estimateSampleTimes = estimateSampleTimes
 						, estimateSampleTimes_densities = estimateSampleTimes_densities  
 						, numStartConditions = numStartConditions
@@ -711,7 +797,9 @@ dater <- function(tre, sts, s=1e3
 			} else{
 				tds <- parallel::mclapply( rtres, function(t){
 					.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-						, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+						, strictClock = strictClock
+						, relaxedClockModel= relaxedClockModel 
+						, temporalConstraints = temporalConstraints, quiet = quiet
 						, estimateSampleTimes = estimateSampleTimes
 						, estimateSampleTimes_densities = estimateSampleTimes_densities  
 						, numStartConditions = numStartConditions
@@ -724,7 +812,9 @@ dater <- function(tre, sts, s=1e3
 		} else{
 			tds <- lapply( rtres, function(t) {
 				.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-					, strictClock = strictClock, temporalConstraints = temporalConstraints, quiet = quiet
+					, strictClock = strictClock
+					, relaxedClockModel = relaxedClockModel
+					, temporalConstraints = temporalConstraints, quiet = quiet
 					, estimateSampleTimes = estimateSampleTimes
 					, estimateSampleTimes_densities = estimateSampleTimes_densities  
 					, numStartConditions = numStartConditions
@@ -743,7 +833,9 @@ dater <- function(tre, sts, s=1e3
 		cat( 'Tree is rooted. Not estimating root position.\n')
 	}
 	td = .dater( tre, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-		, strictClock = strictClock, temporalConstraints = temporalConstraints
+		, strictClock = strictClock
+		, relaxedClockModel = relaxedClockModel
+		, temporalConstraints = temporalConstraints
 		, quiet = quiet
 		, estimateSampleTimes = estimateSampleTimes
 		, estimateSampleTimes_densities = estimateSampleTimes_densities  
