@@ -7,6 +7,7 @@
 dater(tre, sts, s = 1000, omega0 = NA, minblen = NA, maxit = 100,
   abstol = 1e-04, searchRoot = 5, quiet = TRUE,
   temporalConstraints = TRUE, strictClock = FALSE,
+  relaxedClockModel = c("uncorrelated", "additive"),
   estimateSampleTimes = NULL, estimateSampleTimes_densities = list(),
   numStartConditions = 0, clsSolver = c("limSolve", "mgcv"),
   meanRateLimits = NULL, ncpu = 1, parallel_foreach = FALSE)
@@ -51,6 +52,8 @@ Note that execution is faster if this option is FALSE.}
 
 \item{strictClock}{If TRUE, will fit a Poisson evolutionary model without
 rate variation.}
+
+\item{relaxedClockModel}{The type of relaxed clock model to use}
 
 \item{estimateSampleTimes}{If some sample times are not known with certainty,
 bounds can be provided with this option. This should take the

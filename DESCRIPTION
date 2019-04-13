@@ -1,8 +1,8 @@
 Package: treedater
 Type: Package
 Title: Fast Molecular Clock Dating of Phylogenetic Trees with Rate Variation
-Version: 0.3.0
-Date: 2019-01-15
+Version: 0.3.1
+Date: 2019-04-14
 Authors@R: c(person("Erik", "Volz", role = c("aut", "cre"),
                      email = "erik.volz@gmail.com") )
 Author: Erik Volz [aut, cre]

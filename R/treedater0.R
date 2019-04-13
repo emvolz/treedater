@@ -167,7 +167,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	o <- optim( par = x0, fn = of)
 	mu <- unname( exp( o$par['lnmu'] ))
 	sp <- unname( exp( o$par['lnsp'] ))
-browser()
+#~ browser()
 	list( mu = mu, sp = sp, ll = -o$value)
 }
 
@@ -288,12 +288,13 @@ browser()
 	o <- sapply( 1:nrow( td$tre$edge ), function(k) {
 		tau <- blen[k] 
 		x <- (td$tre$edge.length[k]*td$s)
-		lb <- qgamma(1e-6,  shape= mu*tau/sp , scale = sp / tau )
+		#lb <- qgamma(1e-6,  shape= mu*tau/sp , scale = sp ) # gives values too close to zero
+		lb <- mu / 100# TODO would be nice to have a nice way to  choose this lower bound
 		lam_star <- max(lb
-		 , (mu*tau - sp + x * sp)  /  (sp + tau ) 
+		 , (mu*tau - sp + x * sp)  /  (sp + 1 ) 
 		)
 		ll <- dpois( max(0, round(x)),lam_star, log=T )  + 
-		 dgamma(lam_star, shape=mu*tau/sp , scale = sp/tau , log = T)
+		 dgamma(lam_star, shape=mu*tau/sp , scale = sp , log = T)
 		c( lam_star / tau / td$s, ll )
 	})
 #~ browser()
@@ -462,17 +463,9 @@ browser()
 					sp = o$sp 
 					ll = o$ll 
 					oo = .optim.omegas.gammaPoisson2( Ti, mu, sp , td )
-
-o2 <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td, lnd.mean.rate.prior )
-r <- o2$r
-ll <- o2$ll
-gammatheta <- o2$gammatheta
-oo2 <- .optim.omegas.gammaPoisson1( Ti, o2$r, o2$gammatheta, td )
-omegas2 <- oo2$omegas
 				} else{
 					stop('invalid value for *relaxedClockModel*')
 				}
-				# TODO additive version  
 				edge_lls <- oo$lls
 				omegas <- oo$omegas
 			}
@@ -493,9 +486,8 @@ omegas2 <- oo2$omegas
 			if (relaxedClockModel == 'uncorrelated'){
 				omega <- .mean.rate(Ti, r, gammatheta, omegas, td)	
 			} else if ( relaxedClockModel == 'additive' ){
-				omega = mu 
+				omega =  .mean.rate(Ti, 0, 0, omegas, td)
 			}
-			# TODO omega <- ... additive 
 			if ( ll >= lastll ){
 				rv <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
 				 , meanRate = omega
@@ -552,7 +544,7 @@ omegas2 <- oo2$omegas
 	rv$lnd.mean.rate.prior <- lnd.mean.rate.prior
 	rv$meanRateLimits <- meanRateLimits
 	rv$relaxedClockModel = relaxedClockModel 
-	# TODO update calls from parboot and boot 
+	# TODO update calls from parboot and boot for different relaxedClockModel
 	
 	# add pvals for each edge
 	if (rv$clock=='relaxed'){
