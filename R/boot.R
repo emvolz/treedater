@@ -197,6 +197,18 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 	rv
 }
 
+#' ensure that tip composition of btres is same as treedater tree 
+.check.boot.trees <- function (td, btres)
+{
+sapply( btres, function(btre ){
+ if ( length(setdiff(btre$tip.label, td$tip.label) )== 0)
+	if (length( setdiff( td$tip.label, btre$tip.label)) ==0)
+		return(TRUE)
+return(FALSE)
+}) -> x
+all(x)
+}
+
 
 #' Estimate of confidence intervals of molecular clock parameters with user-supplied set of bootstrap trees
 #'
@@ -260,6 +272,9 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 #' @export 
 boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=FALSE, parallel_foreach = FALSE )
 {
+if (!.check.boot.trees( td, tres ) ){
+stop('Error: Different composition of bootstrap and treedater tip labels. Check *td* and *tres* arguments.') 
+}
 	k = 0 # resolve NOTE about 'visible binding for global variable'
 	nreps <- length(tres )
 	if (quiet){
