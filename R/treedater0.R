@@ -428,7 +428,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		while(!done){
 			if (temporalConstraints){
 				if (clsSolver=='limSolve'){
-#~ browser()
 					Ti <- tryCatch( .optim.Ti5.constrained.limsolve ( omegas, td ) 
 					 , error = function(e) .optim.Ti2( omegas, td)  )
 				} else{
@@ -561,15 +560,21 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	# TODO update calls from parboot and boot for different relaxedClockModel
 	
 	# add pvals for each edge
-	if (rv$clock=='relaxed'){
-		# TODO for additive model also
+	if (rv$clock=='uncorrelated'){
 		rv$edge.p <- with(rv, {
 			blen <- pmax(minblen, edge.length)
 			ps <- pmin(1 - 1e-12, theta * blen/(1 + theta * blen))
 				pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
 					prob = 1 - ps)
 			})
-	} else{
+	} else if ( rv$clock=='additive'){
+			rv$edge.p <- with(rv, {
+				blen <- pmax(minblen, edge.length)
+				sizes = mu * blen / sp 
+				pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
+					prob = 1 - sp / (1+sp) )
+			})			
+	} else if (rv$clock=='strict') {
 		rv$edge.p <- with(rv, {
 			blen <- pmax(minblen, edge.length)
 			ppois(pmax(0, round(intree$edge.length * s)), blen * 
