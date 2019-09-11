@@ -334,6 +334,23 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	sum( omegas * blen ) / sum(blen)
 }
 
+#TODO 
+# TODO deprecate *strictClock*
+.mean.rate2 <- function(Ti, r, gammatheta, omegas, td, clock){
+	if ( clock=='strict'){
+		
+	} else if (clock=='uncorrelated' ){
+		...
+		#NB:  r, tau phi / (1 = tau * phi )
+		# Gamma: r ,  phi * tau 
+	} else if( clock=='additive'){
+		...
+		# NB: mu l / s, s / (s+1)
+	} else{
+		stop('Incorrect clock model specified')
+	}
+}
+
 .hack.times1 <- function(Ti, td)
 {
 	#~ 	t <- c( td$sts2[td$tre$tip.label], Ti)
@@ -372,7 +389,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 )
 {
 	clsSolver <- match.arg( clsSolver) 
-	relaxedClockModel <- match.arg( relaxedClockModel ) 
+	relaxedClockModel <- match.arg( relaxedClockModel , choices = c('uncorrelated', 'additive') ) 
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
@@ -480,7 +497,9 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 			
 			if (!quiet)
 			{ 
-				print( data.frame( iteration = iter, median_unadjusted_rate = median(omegas),  coef_of_var =  1 / sqrt(r) ), tmrca = min(Ti), logLik=ll , row.names=iter)
+				print( data.frame( iteration = iter, median_unadjusted_rate = median(omegas)
+				 ,  coef_of_var =  sd(omegas) / mean(omegas) # 1 / sqrt(r) 
+				 , tmrca = min(Ti), logLik=ll , row.names=iter) )
 				cat( '---\n' )
 			}
 			if (relaxedClockModel == 'uncorrelated'){
@@ -531,7 +550,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	rv$sts <- sts
 	rv$minblen <- minblen
 	rv$intree <- tre #.tre
-	rv$coef_of_variation <- ifelse( is.numeric(rv$r), 1 / sqrt(rv$r), NA )  #  TODO for additive model 
+	rv$coef_of_variation <- sd(rv$omegas) / mean(rv$omegas) #ifelse( is.numeric(rv$r), 1 / sqrt(rv$r), NA )  #
 	rv$clock <- ifelse( is.infinite(rv$r), 'strict', 'relaxed')
 	rv$intree_rooted <- intree_rooted
 	rv$is_intree_rooted <- intree_rooted
@@ -669,7 +688,7 @@ dater <- function(tre, sts, s=1e3
  , parallel_foreach = FALSE
 )
 { 
-	clsSolver <- match.arg( clsSolver)
+	clsSolver <- match.arg( clsSolver, choices = c( 'uncorrelated', 'additive' ))
 	relaxedClockModel <- match.arg ( relaxedClockModel )	
 	if (!is.binary( tre ) ){
 		cat( 'Note: *dater* called with non binary tree. Will proceed after resolving polytomies.\n' )
