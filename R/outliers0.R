@@ -23,7 +23,7 @@ outlierLineages <- function(td, alpha = .05, type=c('tips','internal', 'all')){
 	if ( !td$temporalConstraints ){
 		stop('The outlier.tips function requires a treedater object fitted using temporalConstraints=TRUE. Quitting.')
 	}
-	if (td$clock=='relaxed'){
+	if (td$clock=='relaxed'){# TODO 
 		with(td,{
 			blen <- pmax( minblen, edge.length )
 			ps <- pmin(1 - 1e-5, theta*blen / ( 1+ theta * blen ) )

@@ -128,7 +128,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		ps <- pmin(1 - 1e-5, gammatheta*blen / ( 1+ gammatheta * blen ) )
 		ov <- -sum( dnbinom( pmax(0, round(td$tre$edge.length*td$s))
 		  , size= r, prob=1-ps,  log = TRUE) )
-		mr <-  r * gammatheta / td$s # Note this value will differ slightly from output of .mean.rate
+		mr <-  r * gammatheta / td$s 
 		ov <- ov - unname(lnd.mean.rate.prior( mr ))
 		ov 
 	}
@@ -158,7 +158,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		ov <- -sum( dnbinom( pmax(0, round(td$tre$edge.length*td$s))
 		  , size = sizes
 		  , prob = 1 - sp / ( 1+sp ),  log = TRUE) )
-		ov <- ov - unname(lnd.mean.rate.prior( mu ))
+		ov <- ov - unname(lnd.mean.rate.prior( mu  / td$s))
 		ov 
 	}
 	x0 <- c( lnmu = unname(log(mu0)), lnsp = unname( log(sp0)))
@@ -294,7 +294,8 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		 , (mu*tau - sp + x * sp)  /  (sp + 1 ) 
 		)
 		ll <- dpois( max(0, round(x)),lam_star, log=T )  + 
-		 dgamma(lam_star, shape=mu*tau/sp , scale = sp , log = T)
+		 dgamma(lam_star, shape=mu*tau/sp , scale = sp / tau , log = T) 
+#~ 		 dgamma(lam_star, shape=mu*tau/sp , scale = sp , log = T) #TODO should scale be sp / tau?? eqn 9 
 		c( lam_star / tau / td$s, ll )
 	})
 #~ browser()
@@ -327,30 +328,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 }
 
 
-.mean.rate <- function(Ti, r, gammatheta, omegas, td)
-{
-	if (is.infinite(r)) return(gammatheta) # poisson model
-	blen <- .Ti2blen( Ti, td )
-	sum( omegas * blen ) / sum(blen)
-}
-
-#TODO 
-# TODO deprecate *strictClock*
-.mean.rate2 <- function(Ti, r, gammatheta, omegas, td, clock){
-	if ( clock=='strict'){
-		
-	} else if (clock=='uncorrelated' ){
-		...
-		#NB:  r, tau phi / (1 = tau * phi )
-		# Gamma: r ,  phi * tau 
-	} else if( clock=='additive'){
-		...
-		# NB: mu l / s, s / (s+1)
-	} else{
-		stop('Incorrect clock model specified')
-	}
-}
-
 .hack.times1 <- function(Ti, td)
 {
 	#~ 	t <- c( td$sts2[td$tre$tip.label], Ti)
@@ -375,8 +352,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
  , searchRoot = 5
  , quiet = TRUE
  , temporalConstraints = TRUE
- , strictClock = FALSE
- , relaxedClockModel = c( 'uncorrelated', 'additive' )
+ , clock = c( 'uncorrelated', 'additive' , 'strict')
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
  , numStartConditions = 0
@@ -389,8 +365,12 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 )
 {
 	clsSolver <- match.arg( clsSolver) 
-	relaxedClockModel <- match.arg( relaxedClockModel , choices = c('uncorrelated', 'additive') ) 
+	relaxedClockModel <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') ) 
 	# defaults
+	if ( relaxedClockModel=='strict' )
+		strictClock=TRUE
+	else
+		strictClock <- FALSE
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
 	intree_rooted <- TRUE
@@ -502,14 +482,29 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 				 , tmrca = min(Ti), logLik=ll , row.names=iter) )
 				cat( '---\n' )
 			}
-			if (relaxedClockModel == 'uncorrelated'){
-				omega <- .mean.rate(Ti, r, gammatheta, omegas, td)	
-			} else if ( relaxedClockModel == 'additive' ){
-				omega =  .mean.rate(Ti, 0, 0, omegas, td)
+			
+			if (clock !='strict'){
+				blen <- .Ti2blen( Ti, td )
+				omega <- sum( omegas * blen ) / sum(blen)
+			} else{#strict
+				omega <- omegas[1]
 			}
+			
+			if ( clock=='strict'){
+				meanRate = omegas[1]
+			} else if (clock=='uncorrelated' ){
+				meanRate <- ( r * gammatheta / td$s )
+				#NB:  r, tau phi / (1 = tau * phi )
+				# Gamma: r ,  phi * tau 
+			} else if( clock=='additive'){
+				meanRate <- mu / td$s
+			}
+
+			
 			if ( ll >= lastll ){
 				rv <- list( omegas = omegas, r = unname(r), theta = unname(gammatheta), Ti = Ti
-				 , meanRate = omega
+				 , adjusted.mean.rate = omega
+				 , mean.rate = meanRate
 				 , loglik = ll
 				 , edge_lls = edge_lls )
 			}
@@ -551,7 +546,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	rv$minblen <- minblen
 	rv$intree <- tre #.tre
 	rv$coef_of_variation <- sd(rv$omegas) / mean(rv$omegas) #ifelse( is.numeric(rv$r), 1 / sqrt(rv$r), NA )  #
-	rv$clock <- ifelse( is.infinite(rv$r), 'strict', 'relaxed')
+	rv$clock <- clock
 	rv$intree_rooted <- intree_rooted
 	rv$is_intree_rooted <- intree_rooted
 	rv$temporalConstraints <- temporalConstraints
@@ -562,7 +557,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	rv$numStartConditions <- numStartConditions
 	rv$lnd.mean.rate.prior <- lnd.mean.rate.prior
 	rv$meanRateLimits <- meanRateLimits
-	rv$relaxedClockModel = relaxedClockModel 
+	rv$relaxedClockModel = clock 
 	# TODO update calls from parboot and boot for different relaxedClockModel
 	
 	# add pvals for each edge
@@ -595,9 +590,12 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #' of the sequences used to estimate the tree. If the tree is not
 #' rooted, this function will estimate the root position. 
 #' For an introduction to all options and features, see the vignette on Influenza H3N2: vignette("h3n2")
+#'
+#' Multiple molecular clock models are supported including a strict clock and two variations on relaxed clocks. The 'uncorrelated' relaxed clock is the Gamma-Poisson mixture presented by Volz and Frost (2017), while the 'additive' variance model was developed by Didelot & Volz (2019). 
 #' 
 #' @section References:
 #' E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
+#' X. Didelot and Volz, E.M. (2019) Additive uncorrelated relaxed clock models.
 #' 
 #' @param tre An ape::phylo which describes the phylogeny with branches in
 #'        units of substitutions per site. This may be a rooted or
@@ -626,9 +624,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #'        ancestor node in the phylogeny occurs before all progeny.
 #'        Equivalently, this will preclude negative branch lengths.
 #'        Note that execution is faster if this option is FALSE.
-#' @param strictClock If TRUE, will fit a Poisson evolutionary model without
-#'        rate variation.
-#' @param relaxedClockModel The type of relaxed clock model to use
+#' @param clock The choice of molecular clock model. Choices are 'uncorrelated', 'additive', or 'strict'. 
 #' @param estimateSampleTimes If some sample times are not known with certainty,
 #'         bounds can be provided with this option. This should take the
 #'         form of a data frame with columns 'lower' and 'upper'
@@ -677,8 +673,7 @@ dater <- function(tre, sts, s=1e3
  , searchRoot = 5
  , quiet = TRUE
  , temporalConstraints = TRUE
- , strictClock = FALSE
- , relaxedClockModel = c( 'uncorrelated', 'additive' )
+ , clock = c( 'uncorrelated', 'additive', 'strict' )
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
  , numStartConditions = 0
@@ -688,8 +683,13 @@ dater <- function(tre, sts, s=1e3
  , parallel_foreach = FALSE
 )
 { 
-	clsSolver <- match.arg( clsSolver, choices = c( 'uncorrelated', 'additive' ))
-	relaxedClockModel <- match.arg ( relaxedClockModel )	
+	clsSolver <- match.arg( clsSolver, choices = c( 'uncorrelated', 'additive' , 'strict'))
+	relaxedClockModel <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') ) 
+	# defaults
+	if ( relaxedClockModel=='strict' )
+		strictClock=TRUE
+	else
+		strictClock <- FALSE
 	if (!is.binary( tre ) ){
 		cat( 'Note: *dater* called with non binary tree. Will proceed after resolving polytomies.\n' )
 		if ( !is.rooted( tre )){
@@ -794,8 +794,7 @@ dater <- function(tre, sts, s=1e3
 				`%dopar%` <- foreach::`%dopar%`
 				tds <- foreach::foreach( t = iterators::iter( rtres )) %dopar% {
 					.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-						, strictClock = strictClock
-						, relaxedClockModel = relaxedClockModel
+						, clock = clock 
 						, temporalConstraints = temporalConstraints, quiet = quiet
 						, estimateSampleTimes = estimateSampleTimes
 						, estimateSampleTimes_densities = estimateSampleTimes_densities  
@@ -808,8 +807,7 @@ dater <- function(tre, sts, s=1e3
 			} else{
 				tds <- parallel::mclapply( rtres, function(t){
 					.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-						, strictClock = strictClock
-						, relaxedClockModel= relaxedClockModel 
+						, clock = clock 
 						, temporalConstraints = temporalConstraints, quiet = quiet
 						, estimateSampleTimes = estimateSampleTimes
 						, estimateSampleTimes_densities = estimateSampleTimes_densities  
@@ -823,8 +821,7 @@ dater <- function(tre, sts, s=1e3
 		} else{
 			tds <- lapply( rtres, function(t) {
 				.dater( t, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-					, strictClock = strictClock
-					, relaxedClockModel = relaxedClockModel
+					, clock = clock 
 					, temporalConstraints = temporalConstraints, quiet = quiet
 					, estimateSampleTimes = estimateSampleTimes
 					, estimateSampleTimes_densities = estimateSampleTimes_densities  
@@ -844,9 +841,7 @@ dater <- function(tre, sts, s=1e3
 		cat( 'Tree is rooted. Not estimating root position.\n')
 	}
 	td = .dater( tre, sts, s = s, omega0=omega0, minblen=minblen, maxit=maxit,abstol=abstol
-		, strictClock = strictClock
-		, relaxedClockModel = relaxedClockModel
-		, temporalConstraints = temporalConstraints
+		, clock = clock
 		, quiet = quiet
 		, estimateSampleTimes = estimateSampleTimes
 		, estimateSampleTimes_densities = estimateSampleTimes_densities  
@@ -870,8 +865,10 @@ print.treedater <- function(x, ...){
     cat(paste( x$timeOfMRCA, '\n') )
     cat('\n Time to common ancestor (before most recent sample) \n' )
     cat(paste( x$timeToMRCA, '\n') )
-    cat( '\n Mean substitution rate \n')
-    cat(paste( x$meanRate , '\n'))
+    cat( '\n Weighted mean substitution rate (adjusted by branch lengths) \n')
+    cat(paste( x$adjusted.mean.rate , '\n'))
+    cat( '\n Unadjusted mean substitution rate \n')
+    cat(paste( x$mean.rate , '\n'))
     cat( '\n Strict or relaxed clock \n')
     cat(paste( x$clock , '\n'))
     cat( '\n Coefficient of variation of rates \n')
