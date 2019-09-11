@@ -139,19 +139,28 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			if (!success) stop('*parallel_foreach* requires the `foreach` package. Stopping.')
 			`%dopar%` <- foreach::`%dopar%`
 			tds <- foreach::foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% {
-				capture.output( { pbrk <- .parboot.replicate(k) })
+				if (quiet )
+					capture.output( { pbrk <- .parboot.replicate(k) })
+				else
+					 pbrk <- .parboot.replicate(k)
 				pbrk 
 			}
 		} else{
 			tds <- parallel::mclapply( 1:nreps, function(k) {
-				capture.output( { pbrk <- .parboot.replicate(k) })
+				if (quiet)
+					capture.output( { pbrk <- .parboot.replicate(k) })
+				else
+					pbrk <- .parboot.replicate(k)
 				pbrk
 			}
 			, mc.cores = ncpu ) 
 		}
 	} else{
 		tds <- lapply( 1:nreps, function(k) {
-			capture.output( { pbrk <- .parboot.replicate(k) })
+			if (quiet)
+				capture.output( { pbrk <- .parboot.replicate(k) })
+			else
+				pbrk <- .parboot.replicate(k)
 			pbrk
 		})
 	}
@@ -186,6 +195,18 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 	)
 	class(rv) <- 'bootTreedater'
 	rv
+}
+
+#' ensure that tip composition of btres is same as treedater tree 
+.check.boot.trees <- function (td, btres)
+{
+sapply( btres, function(btre ){
+ if ( length(setdiff(btre$tip.label, td$tip.label) )== 0)
+	if (length( setdiff( td$tip.label, btre$tip.label)) ==0)
+		return(TRUE)
+return(FALSE)
+}) -> x
+all(x)
 }
 
 
@@ -251,6 +272,9 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 #' @export 
 boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=FALSE, parallel_foreach = FALSE )
 {
+if (!.check.boot.trees( td, tres ) ){
+stop('Error: Different composition of bootstrap and treedater tip labels. Check *td* and *tres* arguments.') 
+}
 	k = 0 # resolve NOTE about 'visible binding for global variable'
 	nreps <- length(tres )
 	if (quiet){
@@ -304,7 +328,7 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 		}
 		td2
 	}
-
+	
 	if (ncpu > 1)
 	{
 		if (parallel_foreach){
@@ -312,19 +336,28 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 			if (!success) stop('*parallel_foreach* requires the `foreach` package. Stopping.')
 			`%dopar%` <- foreach::`%dopar%`
 			tds <- foreach::foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% {
+				if (quiet)
 				 capture.output( { brk <- .boot.replicate(k) })
+				else 
+					brk <- .boot.replicate(k)
 				 brk 
 			}
 		} else{
 			tds <- parallel::mclapply( 1:nreps, function(k) {
-				capture.output( { brk <- .boot.replicate(k) })
+				if (quiet )
+					capture.output( { brk <- .boot.replicate(k) })
+				else
+					brk <- .boot.replicate(k)
 				brk 
 			}
 			, mc.cores = ncpu ) 
 		}
 	} else{
 		tds <- lapply( 1:nreps, function(k) {
-			capture.output( { brk <- .boot.replicate(k) })
+			if (quiet)
+				capture.output( { brk <- .boot.replicate(k) })
+			else
+				brk <- .boot.replicate(k)
 			brk 
 		})
 	}
