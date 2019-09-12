@@ -28,7 +28,7 @@
 #' @param nreps Integer number of simulations to be carried out 
 #' @param ncpu Number of threads to use for parallel computation. Recommended.
 #' @param overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution. 
-#' @param overrideClock May be 'strict' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td
+#' @param overrideClock May be 'strict' or 'additive' or 'uncorrelated' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td
 #' @param overrideSearchRoot If TRUE, will re-use root position from input treedater tree. Otherwise may re-estimate root position in simulations
 #' @param overrideSeqLength Optional sequence length to use in simulations
 #' @param quiet If TRUE will minimize output printed to screen
@@ -70,7 +70,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 {
 	k = 0 # resolve NOTE about 'visible binding for global variable'
 	if (quiet){
-	cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
+		cat( 'Running in quiet mode. To print progress, set quiet=FALSE.\n')
 	}
 	if (overrideSearchRoot){
 		cat('NOTE: Running with overrideSearchRoot will speed up execution but may underestimate variance.\n')
@@ -88,7 +88,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			blen <- pmax( 1e-12, td$edge.length )
 			if( td$clock == 'strict' ) {
 				# simulate poisson 
-				tre$edge.length <- rpois(length(tre$edge.length), blen * td$meanRate * td$s ) / td$s
+				tre$edge.length <- rpois(length(tre$edge.length), blen * td$mean.rate * td$s ) / td$s
 			} else {
 				#ps <- pmin(1 - 1e-5, td$theta*blen  / ( 1+ td$theta * blen ) )
 				ps <- pmin(1 - 1e-12, td$theta*blen  / ( 1+ td$theta * blen ) )
@@ -102,22 +102,19 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
 			tempConstraint <- td$temporalConstraints
 			if ( overrideTempConstraint) tempConstraint <- FALSE
-			clockstr <- td$clock
+			clock <- td$clock
 			if (!is.null( overrideClock)){
 				if (is.na(overrideClock)) stop('overrideClock NA. Stopping.')
-				if (!overrideClock %in% c('strict', 'relaxed') ){
-					stop('overrideClock must be one of strict or relaxed')
-				}
-				clockstr <- overrideClock
+				clock <- overrideClock
 			}
-			strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
+			
 			seqlen <- ifelse( is.null(overrideSeqLength) , td$s, overrideSeqLength )
 			td2 <- tryCatch({dater(tre, td$sts, s= seqlen
 			 , omega0 = NA
 			 , minblen = td$minblen
 			 , quiet = TRUE
 			 , temporalConstraints = tempConstraint
-			 , strictClock = strictClock
+			 , clock = clock 
 			 , estimateSampleTimes = est
 			 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 			 , numStartConditions = td$numStartConditions 
@@ -167,7 +164,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
 	# output rate CIs, parameter CIs, trees
-	meanRates <- sapply( tds, function(td) td$meanRate )
+	meanRates <- sapply( tds, function(td) td$mean.rate )
 	cvs <- sapply( tds, function(td) td$coef_of_variation )
 	tmrcas <- sapply( tds, function(td) td$timeOfMRCA )
 	ttmrcas <- sapply( tds, function(td) td$timeTo )
@@ -184,7 +181,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 	rv <- list( 
 		trees = tds
 		, meanRates = meanRates
-		, meanRate_CI = c( exp( log(td$meanRate) - log_mr_sd*1.96), exp(log(td$meanRate) + log_mr_sd*1.96 ))
+		, meanRate_CI = c( exp( log(td$mean.rate) - log_mr_sd*1.96), exp(log(td$mean.rate) + log_mr_sd*1.96 ))
 		, coef_of_variation_CI = quantile( cvs, probs = c(alpha/2, 1 - alpha/2))
 		, timeOfMRCA_CI = timeOfMRCA_CI
 		, td = td
@@ -197,8 +194,8 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 	rv
 }
 
-#' ensure that tip composition of btres is same as treedater tree 
-.check.boot.trees <- function (td, btres)
+# ensure that tip composition of btres is same as treedater tree 
+.boot.trees <- function (td, btres)
 {
 sapply( btres, function(btre ){
  if ( length(setdiff(btre$tip.label, td$tip.label) )== 0)
@@ -227,7 +224,7 @@ all(x)
 #' @param ncpu Number of threads to use for parallel computation. Recommended.
 #' @param searchRoot See *dater*
 #' @param overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution. 
-#' @param overrideClock May be 'strict' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td
+#' @param overrideClock May be 'strict' or 'additive' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td
 #' @param quiet If TRUE will minimize output printed to screen
 #' @param normalApproxTMRCA If TRUE will use estimate standard deviation from simulation replicates and report confidence interval based on normal distribution
 #' @param parallel_foreach If TRUE will use the foreach package for parallelization. May work better on HPC systems. 
@@ -298,22 +295,18 @@ stop('Error: Different composition of bootstrap and treedater tip labels. Check 
 		if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
 		tempConstraint <- td$temporalConstraints
 		if ( overrideTempConstraint) tempConstraint <- FALSE
-		clockstr <- td$clock
+		clock <- td$clock
 		if (!is.null( overrideClock)){
 			if (is.na(overrideClock)) stop('overrideClock NA. Quitting.')
-			if (!overrideClock %in% c('strict', 'relaxed') ){
-				stop('overrideClock must be one of strict or relaxed')
-			}
-			clockstr <- overrideClock
+			clock <- overrideClock
 		}
-		strictClock <- ifelse( clockstr=='strict' , TRUE, FALSE )
 		td2 <- tryCatch({ dater(tre, td$sts, s= td$s
 		 , omega0 = NA
 		 , minblen = td$minblen
 		 , quiet = TRUE
 		 , searchRoot = searchRoot
 		 , temporalConstraints = tempConstraint
-		 , strictClock = strictClock
+		 , clock = clock 
 		 , estimateSampleTimes = est
 		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 		 , numStartConditions = td$numStartConditions 
@@ -364,7 +357,7 @@ stop('Error: Different composition of bootstrap and treedater tip labels. Check 
 	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
 	# output rate CIs, parameter CIs, trees
-	meanRates <- sapply( tds, function(td) td$meanRate )
+	meanRates <- sapply( tds, function(td) td$mean.rate )
 	cvs <- sapply( tds, function(td) td$coef_of_variation )
 	tmrcas <- sapply( tds, function(td) td$timeOfMRCA )
 	ttmrcas <- sapply( tds, function(td) td$timeTo )
@@ -378,7 +371,7 @@ stop('Error: Different composition of bootstrap and treedater tip labels. Check 
 	rv <- list( 
 		trees = tds
 		, meanRates = meanRates
-		, meanRate_CI = c( exp( log(td$meanRate) - log_mr_sd*1.96), exp(log(td$meanRate) + log_mr_sd*1.96 ))
+		, meanRate_CI = c( exp( log(td$meanRate) - log_mr_sd*1.96), exp(log(td$mean.rate) + log_mr_sd*1.96 ))
 		, coef_of_variation_CI = quantile( cvs, probs = c(alpha/2, 1 - alpha/2))
 		, timeOfMRCA_CI = timeOfMRCA_CI
 		, td = td
@@ -436,16 +429,17 @@ stop('Error: Different composition of bootstrap and treedater tip labels. Check 
 relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T , ncpu =1 )
 {
 	argnames <- names(list(...))
-	if ( 'strictClock'  %in% argnames) stop('Can not prespecify clock type *strictClock* for relaxed.clock.test. Quitting.')
-	td <- dater(..., strictClock=TRUE)
-	pbtd <-  parboot( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
-	 , overrideClock = 'relaxed' , ncpu = ncpu )
+	if ( 'clock'  %in% argnames) stop('Can not prespecify clock type for relaxed.clock.test. Quitting.')
+	td <- dater(..., clock='strict')
+	suppresWarnings({ pbtd <-  parboot( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
+	 , overrideClock = 'uncorrelated' , ncpu = ncpu )
+	})
 	cvci_null <- pbtd$coef_of_variation_CI
 	
-	tdrc <- dater(..., strictClock=FALSE)
+	tdrc <- dater(..., clock='uncorrelated')
 	clock <- 'strict'
 	if ( tdrc$coef_of_variation > cvci_null[2] ){
-		clock <- 'relaxed'
+		clock <- 'uncorrelated'
 	}
 	cat( paste( 'Best clock model: ', clock, '\n'))
 	cat( paste( 'Null distribution of rate coefficient of variation:', paste(cvci_null, collapse=' '), '\n'))
@@ -471,7 +465,7 @@ print.bootTreedater = print.boot.treedater <- function( x, ... )
 	 , paste( round(100*x$alpha/2, digits=3), '%')
 	 , paste( round(100*(1-x$alpha/2), digits=3), '%')
 	)
-	o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$meanRate)
+	o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$mean.rate)
 	 , c( x$timeOfMRCA_CI[1], x$meanRate_CI[1])  
 	 , c( x$timeOfMRCA_CI[2], x$meanRate_CI[2] )  
 	)

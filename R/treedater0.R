@@ -291,7 +291,8 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		#lb <- qgamma(1e-6,  shape= mu*tau/sp , scale = sp ) # gives values too close to zero
 		lb <- mu / 100# TODO would be nice to have a nice way to  choose this lower bound
 		lam_star <- max(lb
-		 , (mu*tau - sp + x * sp)  /  (sp + 1 ) 
+		 , (mu*tau - sp + x * sp)  /  (sp + 1 )  # yup. 
+#~ 		 , (mu*tau - sp + x * sp)  /  (sp + tau ) # nope.
 		)
 		ll <- dpois( max(0, round(x)),lam_star, log=T )  + 
 		 dgamma(lam_star, shape=mu*tau/sp , scale = sp / tau , log = T) 
@@ -364,13 +365,9 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
  , tiplabel_est_samp_times = NULL
 )
 {
-	clsSolver <- match.arg( clsSolver) 
-	relaxedClockModel <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') ) 
+	clsSolver <- match.arg( clsSolver, choices = c('limSolve', 'mgcv')) 
+	clock <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') ) 
 	# defaults
-	if ( relaxedClockModel=='strict' )
-		strictClock=TRUE
-	else
-		strictClock <- FALSE
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
 	intree_rooted <- TRUE
@@ -413,8 +410,8 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	bestrv <- list()
 	for ( omega0 in omega0s ){
 		# initial gamma parms with small variance
-		r = r0 <- ifelse(strictClock, Inf, sqrt(10))  #sqrt(r) = 10 
-		gammatheta = gammatheta0 <- ifelse(strictClock, omega0, omega0 * td$s / r0)
+		r = r0 <- ifelse(clock=='strict', Inf, sqrt(10))  #sqrt(r) = 10 
+		gammatheta = gammatheta0 <- ifelse(clock=='strict', omega0, omega0 * td$s / r0)
 		mu = omega0  * td$s
 		sp = 1e-2
 		
@@ -438,7 +435,9 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 			}
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
-				o <- .optim.omega.poisson0(Ti, .mean.rate(Ti, r, gammatheta, omegas, td), td, lnd.mean.rate.prior , meanRateLimits)
+				o <- .optim.omega.poisson0(Ti
+				  , mean(omegas)
+				  , td, lnd.mean.rate.prior , meanRateLimits)
 				gammatheta <- unname(o$omega)
 				if (!is.infinite(r)) lastll <- -Inf # the first time it switches, do not do likelihood comparison 
 				r <- Inf#unname(o$omega)
@@ -446,21 +445,21 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 				edge_lls <- 0
 				omegas <- rep( gammatheta, length(omegas))
 			} else{
-				if (relaxedClockModel == 'uncorrelated')
+				if (clock == 'uncorrelated')
 				{
 					o <- .optim.r.gammatheta.nbinom0(  Ti, r, gammatheta, td, lnd.mean.rate.prior )
 					r <- o$r
 					ll <- o$ll
 					gammatheta <- o$gammatheta
 					oo <- .optim.omegas.gammaPoisson1( Ti, o$r, o$gammatheta, td )
-				} else if (relaxedClockModel=='additive'){
+				} else if (clock=='additive'){
 					o <- .optim.nbinom1( Ti, mu, sp, td, lnd.mean.rate.prior )
 					mu = o$mu 
 					sp = o$sp 
 					ll = o$ll 
 					oo = .optim.omegas.gammaPoisson2( Ti, mu, sp , td )
 				} else{
-					stop('invalid value for *relaxedClockModel*')
+					stop('invalid value for *clock*')
 				}
 				edge_lls <- oo$lls
 				omegas <- oo$omegas
@@ -557,23 +556,24 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	rv$lnd.mean.rate.prior <- lnd.mean.rate.prior
 	rv$meanRateLimits <- meanRateLimits
 	rv$relaxedClockModel = clock 
-	# TODO update calls from parboot and boot for different relaxedClockModel
+	rv$mu <- mu
+	rv$sp <- sp 
 	
 	# add pvals for each edge
 	if (rv$clock=='uncorrelated'){
 		rv$edge.p <- with(rv, {
 			blen <- pmax(minblen, edge.length)
-			ps <- pmin(1 - 1e-12, theta * blen/(1 + theta * blen))
-				pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
+			ps <- pmax(1e-12, pmin(1 - 1e-12, theta * blen/(1 + theta * blen)) )
+			pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
 					prob = 1 - ps)
 			})
 	} else if ( rv$clock=='additive'){
 			rv$edge.p <- with(rv, {
 				blen <- pmax(minblen, edge.length)
 				sizes = mu * blen / sp 
-				pnbinom(pmax(0, round(intree$edge.length * s)), size = r, 
+				pnbinom(pmax(0, round(intree$edge.length * s)), size = sizes, 
 					prob = 1 - sp / (1+sp) )
-			})			
+			})
 	} else if (rv$clock=='strict') {
 		rv$edge.p <- with(rv, {
 			blen <- pmax(minblen, edge.length)
@@ -688,13 +688,9 @@ dater <- function(tre, sts, s=1e3
  , parallel_foreach = FALSE
 )
 { 
-	clsSolver <- match.arg( clsSolver, choices = c( 'uncorrelated', 'additive' , 'strict'))
-	relaxedClockModel <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') ) 
+	clsSolver <- match.arg( clsSolver, choices = c('limSolve', 'mgcv'))
+	clock <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') ) 
 	# defaults
-	if ( relaxedClockModel=='strict' )
-		strictClock=TRUE
-	else
-		strictClock <- FALSE
 	if (!is.binary( tre ) ){
 		cat( 'Note: *dater* called with non binary tree. Will proceed after resolving polytomies.\n' )
 		if ( !is.rooted( tre )){
@@ -874,7 +870,7 @@ print.treedater <- function(x, ...){
     cat(paste( x$adjusted.mean.rate , '\n'))
     cat( '\n Unadjusted mean substitution rate \n')
     cat(paste( x$mean.rate , '\n'))
-    cat( '\n Strict or relaxed clock \n')
+    cat( '\n Clock model  \n')
     cat(paste( x$clock , '\n'))
     cat( '\n Coefficient of variation of rates \n')
     cat(paste( x$coef_of_variation, '\n' ))
@@ -911,7 +907,7 @@ The following steps may help to fix or alleviate common problems:
 * Check that the vector of sample times is correctly named and that the units are correct. 
 * If passing a rooted tree, make sure that the root position was chosen correctly, or estimate the root position by passing an unrooted tree (e.g. pass ape::unroot(tree))
 * The root position may be poorly estimated. Try increasing the _searchRoot_ parameter in order to test more lineages as potential root positions. 
-* The model may be fitted by a relaxed or strict molecular clock. Try changing the _strictClock_ parameter 
+* The model may be fitted by a relaxed or strict molecular clock. Try changing the _clock_ parameter 
 * A poor fit may be due to a small number of lineages with unusual / outlying branch lengths which can occur due to sequencing error or poor alignment. Try the *outlierTips* command to identify and remove these lineages. 
 * Check that there is adequate variance in sample times in order to estimate a molecular clock by doing a root-to-tip regression. Try the *rootToTipRegressionPlot* command. If the clock rate can not be reliably estimated, you can fix the value to a range using the _meanRateLimits_ option which would estimate a time tree given the previous estimate of clock rates. 
 '

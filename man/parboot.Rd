@@ -18,7 +18,7 @@ parboot(td, nreps = 100, ncpu = 1, overrideTempConstraint = TRUE,
 
 \item{overrideTempConstraint}{If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution.}
 
-\item{overrideClock}{May be 'strict' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td}
+\item{overrideClock}{May be 'strict' or 'additive' or 'uncorrelated' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td}
 
 \item{overrideSearchRoot}{If TRUE, will re-use root position from input treedater tree. Otherwise may re-estimate root position in simulations}
 

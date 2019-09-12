@@ -19,7 +19,7 @@ boot(td, tres, ncpu = 1, searchRoot = 1,
 
 \item{overrideTempConstraint}{If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution.}
 
-\item{overrideClock}{May be 'strict' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td}
+\item{overrideClock}{May be 'strict' or 'additive' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td}
 
 \item{quiet}{If TRUE will minimize output printed to screen}
 
