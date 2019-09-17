@@ -89,14 +89,23 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			if( td$clock == 'strict' ) {
 				# simulate poisson 
 				tre$edge.length <- rpois(length(tre$edge.length), blen * td$mean.rate * td$s ) / td$s
-			} else {
+			} else if (td$clock=='uncorrelated') {
 				#ps <- pmin(1 - 1e-5, td$theta*blen  / ( 1+ td$theta * blen ) )
 				ps <- pmin(1 - 1e-12, td$theta*blen  / ( 1+ td$theta * blen ) )
 				tre$edge.length <- rnbinom( length(td$edge.length)
 				 , td$r
 				 , 1 - ps
 				) / td$s
+			} else if ( td$clock=='additive'){
+				sizes = td$mu * blen / td$sp 
+				tre$edge.length <- rnbinom( length(td$edge.length)
+				 , sizes
+				 , 1 - td$sp / ( 1 + td$sp )
+				) / td$s
+			} else{
+				stop( '*clock* not supported' )
 			}
+			
 			if (!td$intree_rooted & !overrideSearchRoot) tre <- unroot( tre )
 			est <- NULL
 			if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
@@ -161,7 +170,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			pbrk
 		})
 	}
-	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
+	tds[!( sapply(tds, function(td) is.null(td) ) )  ] 
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
 	# output rate CIs, parameter CIs, trees
 	meanRates <- sapply( tds, function(td) td$mean.rate )
