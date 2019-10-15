@@ -94,6 +94,8 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	W <- abs( 1/( (tre$edge.length + cc / s)/s) ) 
 	#W <- abs( 1/( pmax(.001,tre$edge.length) )/s)
 	
+	postorder_internal_nodes <- unique( tre$edge[ ape::postorder( tre ),1] )
+	
 	list( A0 = A, B0 = B, W0 = W, n = n, tipEdges=tipEdges
 	 , i_tip_edge2label = i_tip_edge2label
 	 , sts2 = sts  # in order of tipEdges
@@ -104,6 +106,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	 , parent = parent
 	 , Ain = Ain
 	 , bin = bin
+	 , postorder_internal_nodes = postorder_internal_nodes
 	)
 }
 
@@ -215,6 +218,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
 		# initial feasible parameter values:
 		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
+#~ browser()
 		if (any(is.na(p0))){
 			warning('Numerical error when performing least squares optimisation. Values are approximate. Try adjusting minimum branch length(`minblen`) and/or initial rate omega0.')
 			p0[is.na(p0)] <- max(p0, na.rm=T)
@@ -292,14 +296,12 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		lb <- mu / 100# TODO would be nice to have a nice way to  choose this lower bound
 		lam_star <- max(lb
 		 , (mu*tau - sp + x * sp)  /  (sp + 1 )  # yup. 
-#~ 		 , (mu*tau - sp + x * sp)  /  (sp + tau ) # nope.
+		# , (mu*tau - sp + x * sp)  /  (sp + tau ) # nope.
 		)
 		ll <- dpois( max(0, round(x)),lam_star, log=T )  + 
 		 dgamma(lam_star, shape=mu*tau/sp , scale = sp / tau , log = T) 
-#~ 		 dgamma(lam_star, shape=mu*tau/sp , scale = sp , log = T) #TODO should scale be sp / tau?? eqn 9 
 		c( lam_star / tau / td$s, ll )
 	})
-#~ browser()
 	list( omegas = o[1,] , ll = unname( sum( o[2,] )), lls = unname(o[2,] ) )
 }
 
@@ -344,6 +346,24 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	}
 	t[inodes]
 }
+
+
+.fix.Ti <- function(Ti, td){
+	.Ti <- Ti
+	n <- 1 + length(Ti)
+	sts_Ti <- c( td$sts1[td$tre$tip.label], Ti)
+	for ( i in td$postorder_internal_nodes-n ){
+		uv <- td$daughters[ i+n, ] 
+		if ( !is.na(sts_Ti[uv[1]]))
+			Ti[i] <- min( Ti[i], sts_Ti[uv[1]] - td$minblen  )
+		if ( !is.na(sts_Ti[uv[2]]))
+			Ti[i] <- min( Ti[i], sts_Ti[uv[2]] - td$minblen  )
+		sts_Ti[ i + n ] <- Ti[i]
+	}
+#~ browser()
+	Ti
+}
+
 
 .dater <- function(tre, sts, s=1e3
  , omega0 = NA
@@ -424,6 +444,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		rv <- list()
 		while(!done){
 			if (temporalConstraints){
+#~ browser()
 				if (clsSolver=='limSolve'){
 					Ti <- tryCatch( .optim.Ti5.constrained.limsolve ( omegas, td ) 
 					 , error = function(e) .optim.Ti2( omegas, td)  )
@@ -432,7 +453,9 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 				}
 			} else{
 				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate=FALSE )
-			}
+			} 
+#~ 			.Ti <- .fix.Ti( Ti, td ) #TODO
+#~ .Ti <- .hack.times1( Ti, td ) #TODO
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
 				o <- .optim.omega.poisson0(Ti
@@ -464,6 +487,11 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 				edge_lls <- oo$lls
 				omegas <- oo$omegas
 			}
+#~ blen <- .Ti2blen( Ti, td )
+#~ .blen <- .Ti2blen( .Ti, td )
+#~ .o <- .optim.r.gammatheta.nbinom0(  .Ti, r, gammatheta, td, lnd.mean.rate.prior )
+#~ .oo <- .optim.omegas.gammaPoisson1( .Ti, .o$r, .o$gammatheta, td )
+#~ browser()
 			
 			if (EST_SAMP_TIMES)
 			{
