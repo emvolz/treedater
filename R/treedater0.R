@@ -92,7 +92,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	bin[tipEdges] <- sts # terminal edges to -sample time #...
 	
 	W <- abs( 1/( (tre$edge.length + cc / s)/s) ) 
-	#W <- abs( 1/( pmax(.001,tre$edge.length) )/s)
 	
 	postorder_internal_nodes <- unique( tre$edge[ ape::postorder( tre ),1] )
 	
@@ -110,11 +109,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	)
 }
 
-.Ti2blen <- function(Ti, td ){
-	Ti <- c( td$sts[td$tre$tip.label], Ti)
-	elmat <- cbind( Ti[td$tre$edge[,1]], Ti[td$tre$edge[,2]])
-	pmax(td$minblen,-elmat[,1]  + elmat[,2] )
-}
 
 .optim.r.gammatheta.nbinom0 <- function(  Ti, r0, gammatheta0, td, lnd.mean.rate.prior)
 {	
@@ -170,7 +164,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	o <- optim( par = x0, fn = of)
 	mu <- unname( exp( o$par['lnmu'] ))
 	sp <- unname( exp( o$par['lnsp'] ))
-#~ browser()
 	list( mu = mu, sp = sp, ll = -o$value)
 }
 
@@ -217,14 +210,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		B <- td$B0
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
 		# initial feasible parameter values:
-		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
-#~ browser()
-		if (any(is.na(p0))){
-			warning('Numerical error when performing least squares optimisation. Values are approximate. Try adjusting minimum branch length(`minblen`) and/or initial rate omega0.')
-			p0[is.na(p0)] <- max(p0, na.rm=T)
-		}
-		p1 <- .hack.times1(p0, td )
-	
+			
 	w <- sqrt(td$W)
 	unname( lsei( A = A * w
 	 , B = B * w
@@ -244,7 +230,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
 		
 		# initial feasible parameter values:
-		#p0 <- ( coef( lm ( B ~ A -1 , weights = td$W/omegas) ) )
 		p0 <- ( coef( lm ( B ~ A -1 , weights = td$W) ) )
 		if (any(is.na(p0))){
 			warning('Numerical error when performing least squares optimisation. Values are approximate. Try adjusting minimum branch length(`minblen`) and/or initial rate omega0.')
@@ -316,6 +301,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		tu <- Ti[u-td$n]
 		of <- function(tv){
 			.blen <- tv - tu 
+if( .blen < 0 ) browser() 
 			-dst(tv, V) -
 			  dpois( max(0, round(td$tre$edge.length[k]*td$s))
 			  , td$s * .blen * omegas[k] 
@@ -328,6 +314,15 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		o$minimum
 	})
 	o
+}
+
+.Ti2blen <- function(Ti, td, enforce_minblen = TRUE ){
+	Ti <- c( td$sts[td$tre$tip.label], Ti)
+	elmat <- cbind( Ti[td$tre$edge[,1]], Ti[td$tre$edge[,2]])
+	if ( enforce_minblen )
+		return( pmax(td$minblen,-elmat[,1]  + elmat[,2] ) )
+	else 
+		return( -elmat[,1]  + elmat[,2] )
 }
 
 
@@ -360,7 +355,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 			Ti[i] <- min( Ti[i], sts_Ti[uv[2]] - td$minblen  )
 		sts_Ti[ i + n ] <- Ti[i]
 	}
-#~ browser()
 	Ti
 }
 
@@ -408,10 +402,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		}
 		omega0s <- qnorm( unique(sort(c(.5, seq(.025, .975, l=numStartConditions*2) )))  , omega0, sd = omega0sd )
 		omega0s <- omega0s[ omega0s > 0 ]
-		#if (!quiet){
-		#	cat('initial rates:\n')
-		#	print(omega0s)
-		#}
 	} else{
 		omega0s <- c( omega0 )
 	}
@@ -444,7 +434,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		rv <- list()
 		while(!done){
 			if (temporalConstraints){
-#~ browser()
 				if (clsSolver=='limSolve'){
 					Ti <- tryCatch( .optim.Ti5.constrained.limsolve ( omegas, td ) 
 					 , error = function(e) .optim.Ti2( omegas, td)  )
@@ -454,8 +443,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 			} else{
 				Ti <- .optim.Ti0( omegas, td, scale_var_by_rate=FALSE )
 			} 
-#~ 			.Ti <- .fix.Ti( Ti, td ) #TODO
-#~ .Ti <- .hack.times1( Ti, td ) #TODO
+			Ti <- .fix.Ti( Ti, td ) 
 			if ( (1 / sqrt(r)) < CV_LB){
 				# switch to poisson model
 				o <- .optim.omega.poisson0(Ti
@@ -487,17 +475,13 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 				edge_lls <- oo$lls
 				omegas <- oo$omegas
 			}
-#~ blen <- .Ti2blen( Ti, td )
-#~ .blen <- .Ti2blen( .Ti, td )
-#~ .o <- .optim.r.gammatheta.nbinom0(  .Ti, r, gammatheta, td, lnd.mean.rate.prior )
-#~ .oo <- .optim.omegas.gammaPoisson1( .Ti, .o$r, .o$gammatheta, td )
-#~ browser()
-			
+						
 			if (EST_SAMP_TIMES)
 			{
 				o_sts <- .optim.sampleTimes0( Ti, omegas, estimateSampleTimes,estimateSampleTimes_densities, td, iedge_tiplabel_est_samp_times )
 				sts[tiplabel_est_samp_times] <- o_sts
 				td$sts[tiplabel_est_samp_times] <- o_sts
+				td$sts1[tiplabel_est_samp_times] <- o_sts
 				td$sts2[tiplabel_est_samp_times] <- o_sts
 			}
 			
@@ -554,12 +538,17 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	
 	rv <- bestrv
 	
-	#.tre <- tre
-	td$minblen <- -Inf; 
-	blen <- .Ti2blen( rv$Ti, td )
-	#tre$edge.length <- blen 
-	#rv$tre <- tre
-	
+	# one last round of st estimation b/c td$sts may not match bestrv 
+	if (EST_SAMP_TIMES)
+	{
+		o_sts <- .optim.sampleTimes0( rv$Ti, rv$omegas, estimateSampleTimes,estimateSampleTimes_densities, td, iedge_tiplabel_est_samp_times )
+		sts[tiplabel_est_samp_times] <- o_sts
+		td$sts[tiplabel_est_samp_times] <- o_sts
+		td$sts1[tiplabel_est_samp_times] <- o_sts
+		td$sts2[tiplabel_est_samp_times] <- o_sts
+	}
+
+	blen <- .Ti2blen( rv$Ti, td , enforce_minblen=FALSE)
 	rv$edge <- tre$edge
 	rv$edge.length <- blen
 	rv$tip.label <- tre$tip.label
