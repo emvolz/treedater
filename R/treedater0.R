@@ -967,6 +967,9 @@ NOTE: The p values for lineage clock rates show at least one outlying value afte
 #' This function will print statistics computed from the linear regression model. 
 #' 
 #' @param td A fitted treedater object 
+#' @param show.tip.labels If TRUE, the names of each sample will be plotted at the their corresponding time and evoutionary distance
+#' @param textopts An optional list of parameters for plotted tip labels. Passed to the *text* function. 
+#' @param pointopts An optional list of parameters for plotted points if showing tip labels. Passed to the *points* function. 
 #' @param ... Additional arguments are passed to plot
 #' @return The fitted linear model (class 'lm')
 #' @examples
@@ -984,7 +987,7 @@ NOTE: The p values for lineage clock rates show at least one outlying value afte
 #' summary(fit)
 #' 
 #' @export 
-rootToTipRegressionPlot <- function(td, ... ){
+rootToTipRegressionPlot <- function(td, show.tip.labels=FALSE, textopts = NULL, pointopts=NULL, ... ){
 	stopifnot( inherits( td, 'treedater'))
 	dT <- ape::node.depth.edgelength( td  )
 	dG <- ape::node.depth.edgelength( td$intree )
@@ -993,12 +996,26 @@ rootToTipRegressionPlot <- function(td, ... ){
 	nts <- (td$timeOfMRCA+dT)
 	mtip  <- lm( dG[1:ape::Ntip(td)] ~ sts )
 	mall  <- lm( dG ~ nts )
-	graphics::plot( dT + td$timeOfMRCA, dG
-	  , col = c(rep('red', ape::Ntip(td)), rep('black', ape::Nnode(td) ) )  
-	  , xlab = '' 
-	  , ylab = 'Evolutionary distance'
-	  , ... 
-	)
+	if ( !show.tip.labels){
+		graphics::plot( dT + td$timeOfMRCA, dG
+		  , col = c(rep('red', ape::Ntip(td)), rep('black', ape::Nnode(td) ) )  
+		  , xlab = '' 
+		  , ylab = 'Evolutionary distance'
+		  , ... 
+		)
+	} else {
+		i <- 1:ape::Ntip(td)
+		j <- (ape::Ntip(td)+1):( ape::Ntip(td) + ape::Nnode(td) ) 
+		graphics::plot( x = NULL, y = NULL 
+		  , xlab = '' 
+		  , ylab = 'Evolutionary distance'
+		  , xlim = range( dT + td$timeOfMRCA)
+		  , ylim = range( dG ) 
+		  , ...
+		)
+		do.call( graphics::points, c( pointopts, list(x =   dT[j] + td$timeOfMRCA, y = dG[j] )))
+		do.call( text, c( list( x = dT[i] + td$timeOfMRCA, y = dG[i] , labels=td$tip.label ), textopts ) )
+	}
 	graphics::abline( a = coef(mtip)[1], b = coef(mtip)[2], col = 'red' ) 
 	graphics::abline( a = coef(mall)[1], b = coef(mall)[2], col = 'black' ) 
 	smtip <- summary( mtip )
