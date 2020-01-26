@@ -47,7 +47,7 @@ tre <- ape::rtree(25)
 sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
 # modify edge length to represent evolutionary distance with rate 1e-3:
 tre$edge.length <- tre$edge.length * 1e-3
-relaxedClockTest( tre, sts, nreps=25)
+relaxedClockTest( tre, sts, s= 1000,  omega0=.0015 , nreps=25)
 
 
 }

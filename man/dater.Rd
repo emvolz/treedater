@@ -6,9 +6,9 @@
 \usage{
 dater(tre, sts, s = 1000, omega0 = NA, minblen = NA, maxit = 100,
   abstol = 1e-04, searchRoot = 5, quiet = TRUE,
-  temporalConstraints = TRUE, clock = c("uncorrelated", "additive",
-  "strict"), estimateSampleTimes = NULL,
-  estimateSampleTimes_densities = list(), numStartConditions = 0,
+  temporalConstraints = TRUE, clock = c("strict", "uncorrelated",
+  "additive"), estimateSampleTimes = NULL,
+  estimateSampleTimes_densities = list(), numStartConditions = 1,
   clsSolver = c("limSolve", "mgcv"), meanRateLimits = NULL, ncpu = 1,
   parallel_foreach = FALSE)
 }
@@ -26,7 +26,7 @@ tre$tip.label.}
 
 \item{s}{Sequence length (numeric). This should correspond to sequence length used in phylogenetic analysis and will not necessarily be the same as genome length.}
 
-\item{omega0}{Initial guess of the mean substitution rate (substitutions
+\item{omega0}{Vector providing initial guess or guesses of the mean substitution rate (substitutions
 per site per unit time). If not provided, will guess using
 root to tip regression.}
 
@@ -108,7 +108,7 @@ sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.la
 # modify edge length to represent evolutionary distance with rate 1e-3:
 tre$edge.length <- tre$edge.length * 1e-3
 # treedater: 
-td <- dater( tre, sts =sts )
+td <- dater( tre, sts =sts , s = 1000, clock='strict', omega0=.0015)
 
 
 }

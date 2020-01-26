@@ -34,7 +34,7 @@ sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.la
 # modify edge length to represent evolutionary distance with rate 1e-3:
 tre$edge.length <- tre$edge.length * 1e-3
 # treedater: 
-td <- dater( tre, sts =sts )
+td <- dater( tre, sts =sts, clock='strict', s = 1000, omega0=.0015 )
 # root to tip regression: 
 fit = rootToTipRegressionPlot( td )
 summary(fit)

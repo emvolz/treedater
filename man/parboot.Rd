@@ -66,7 +66,7 @@ sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.la
 # modify edge length to represent evolutionary distance with rate 1e-3:
 tre$edge.length <- tre$edge.length * 1e-3
 # treedater: 
-td <- dater( tre, sts =sts )
+td <- dater( tre, sts=sts, s=1000, clock='strict', omega0=.0015 )
 # parametric bootstrap: 
 pb <- parboot( td, nreps=25 )
 # plot lineages through time

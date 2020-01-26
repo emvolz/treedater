@@ -5,7 +5,7 @@ Platform: Ubuntu 18.04.1 LTS
 * x86_64-pc-linux-gnu (64-bit)
 
 Platform: Windows via Win-builder 
-* using R version 3.5.2 (2018-12-20)
+* using R-release, currently R-3.6.1
 * using platform: x86_64-w64-mingw32 (64-bit)
 
 

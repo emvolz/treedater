@@ -82,18 +82,22 @@ hist( sts , main = 'Time of sequence sampling')
 
 The basic usage of the treedater algorithm is as follows:
 ```{r}
-(dtr <- dater( tre , sts, seqlen ))
+dtr <- dater( tre , sts, seqlen, clock = 'strict' )
+dtr
 ```
 This produces a *rooted* tree with branches in calendar time. Note that if we invoked `dater` with a rooted input tree, it would _not_ estimate the root position. In this way, you can also set the root location in other ways, such as by using an outgroup. 
+It is also good practice to provide at least one initial guess of the substitution rate using the `omega0` parameter, but if we omit that value as we have done here, treedater will attempt to guess good starting values. 
+You can also specify an uncorrelated relaxed clock using `clock='uncorrelated'`. 
 
 Lets see how long it takes to run treedater:
 
 ```{r}
 rt0 <- Sys.time()
-dtr <- dater( tre , sts, seqlen )
+dtr <- dater( tre , sts, seqlen, clock = 'strict' )
 rt1 <- Sys.time()
 rt1 - rt0 
 ```
+You can speed up treedater by providing a rooted tree, or by providing an educated guess of the substitution rate, or by using parallel computing with the `ncpu` option.
 
 Note the returned value includes estimated substition rates and TMRCAs. 
 The `dtr` object extends `ape::phylo`, so most of the methods that you can use in other R packages that use that format can also be used with a `dater` object. Lets plot the tree. 
@@ -112,6 +116,7 @@ It is always a good idea to visualize these distances to ensure that there is en
 
 
 ## Detecting and removing outliers / testing for relaxed clock
+
 To find lineages that dont fit the molecular clock model very well, run
 
 ```{r}
@@ -129,7 +134,8 @@ tre2 <- ape::drop.tip( tre, rownames(outliers[outliers$q < 0.20,]) )
 Now we can rerun `dater` with the reduced tree:
 
 ```{r}
-(dtr2 <- dater(tre2, sts, seqlen, ncpu = 1) ) # increase ncpu to use parallel computing
+dtr2 <- dater(tre2, sts, seqlen, clock='uncorrelated', ncpu = 1)  # increase ncpu to use parallel computing
+dtr2
 ```
 
 After removing the outliers, the coefficient of variation of rates is much lower, suggesting that a strict clock model may be appropriate for the reduced tree. We can test the suitability of the strict clock with this test: 
@@ -146,7 +152,8 @@ Nevertheless, lets re-fit the model to the reduced tree using a strict clock for
 
 
 ```{r}
-(dtr3 <- dater( tre2, sts, seqlen, strict=TRUE ))
+dtr3 <- dater( tre2, sts, seqlen, clock='strict' )
+dtr3
 ```
 
 ```{r}
@@ -156,6 +163,7 @@ plot( dtr3 , no.mar=T, cex = .2 )
 The rate is higher than the initial estimate with the relaxed clock and the recently-sampled outlying lineages have been removed. 
 
 ## Parametric bootstrap
+
 Estimating confidence intervals for rates and dates is straightforward using a parametric bootstrap: 
 
 ```{r}
@@ -202,7 +210,7 @@ In this case, we constructed the data frame with bounds for the first 50 samples
 Now re-run treedater with the uncertain sample times. The vector `sts` provided here gives an initial guess of the unknown sample times. 
 
 ```{r}
-(dtr4 <- dater( tre2, sts, seqlen, strict = TRUE, estimateSampleTimes = sts.df ) )
+(dtr4 <- dater( tre2, sts, seqlen, clock='strict', estimateSampleTimes = sts.df ) )
 ```
 
 Note that the estimated rates and dates didnt change very much due to uncertain sample dates in this case.   

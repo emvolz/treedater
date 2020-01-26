@@ -62,7 +62,7 @@ bootTrees <- lapply( 1:25, function(i) {
 })
 tre$edge.length <- tre$edge.length * 1e-3
 # run treedater
-td <- dater( tre, sts  )
+td <- dater( tre, sts, s= 1000, clock='strict', omega0=.0015  )
 # bootstrap: 
 ( tdboot <- boot( td, bootTrees ) )
 # plot lineages through time :

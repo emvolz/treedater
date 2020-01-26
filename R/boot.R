@@ -59,7 +59,7 @@
 #' # modify edge length to represent evolutionary distance with rate 1e-3:
 #' tre$edge.length <- tre$edge.length * 1e-3
 #' # treedater: 
-#' td <- dater( tre, sts =sts )
+#' td <- dater( tre, sts=sts, s=1000, clock='strict', omega0=.0015 )
 #' # parametric bootstrap: 
 #' pb <- parboot( td, nreps=25 )
 #' # plot lineages through time
@@ -128,8 +128,8 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
 			 , numStartConditions = td$numStartConditions 
 			 , meanRateLimits = td$meanRateLimits
-			)}, error =function(e) NA )
-			if (suppressWarnings( is.na( td2[1])) ) return (NA )
+			)}, error =function(e) NULL )
+			if (suppressWarnings( is.null( td2)) ) return (NULL )
 			if (!quiet){
 				cat('\n #############################\n')
 				cat( paste( '\n Replicate', k, 'complete \n' ))
@@ -170,10 +170,10 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			pbrk
 		})
 	}
-	tds[!( sapply(tds, function(td) is.null(td) ) )  ] 
+	tds <- tds[ !sapply(tds,  is.null)  ] 
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
 	# output rate CIs, parameter CIs, trees
-	meanRates <- sapply( tds, function(td) td$mean.rate )
+	meanRates <- unlist( sapply( tds, function(td) td$mean.rate ) )
 	cvs <- sapply( tds, function(td) td$coef_of_variation )
 	tmrcas <- sapply( tds, function(td) td$timeOfMRCA )
 	ttmrcas <- sapply( tds, function(td) td$timeTo )
@@ -268,7 +268,7 @@ all(x)
 #' })
 #' tre$edge.length <- tre$edge.length * 1e-3
 #' # run treedater
-#' td <- dater( tre, sts  )
+#' td <- dater( tre, sts, s= 1000, clock='strict', omega0=.0015  )
 #' # bootstrap: 
 #' ( tdboot <- boot( td, bootTrees ) )
 #' # plot lineages through time :
@@ -278,9 +278,6 @@ all(x)
 #' @export 
 boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=FALSE, parallel_foreach = FALSE )
 {
-if (!.check.boot.trees( td, tres ) ){
-stop('Error: Different composition of bootstrap and treedater tip labels. Check *td* and *tres* arguments.') 
-}
 	k = 0 # resolve NOTE about 'visible binding for global variable'
 	nreps <- length(tres )
 	if (quiet){
@@ -431,7 +428,7 @@ stop('Error: Different composition of bootstrap and treedater tip labels. Check 
 #' sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
 #' # modify edge length to represent evolutionary distance with rate 1e-3:
 #' tre$edge.length <- tre$edge.length * 1e-3
-#' relaxedClockTest( tre, sts, nreps=25)
+#' relaxedClockTest( tre, sts, s= 1000,  omega0=.0015 , nreps=25)
 #'
 #'
 #' @export 
@@ -440,7 +437,7 @@ relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T , ncpu =1
 	argnames <- names(list(...))
 	if ( 'clock'  %in% argnames) stop('Can not prespecify clock type for relaxed.clock.test. Quitting.')
 	td <- dater(..., clock='strict')
-	suppresWarnings({ pbtd <-  parboot( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
+	suppressWarnings({ pbtd <-  parboot( td , nreps = nreps,  overrideTempConstraint=overrideTempConstraint
 	 , overrideClock = 'uncorrelated' , ncpu = ncpu )
 	})
 	cvci_null <- pbtd$coef_of_variation_CI

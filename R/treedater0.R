@@ -367,10 +367,10 @@ if( .blen < 0 ) browser()
  , searchRoot = 5
  , quiet = TRUE
  , temporalConstraints = TRUE
- , clock = c( 'uncorrelated', 'additive' , 'strict')
+ , clock = c('strict',  'uncorrelated', 'additive')
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
- , numStartConditions = 0
+ , numStartConditions = 1
  , clsSolver=c('limSolve', 'mgcv')
  , meanRateLimits = NULL
  , ncpu = 1
@@ -381,6 +381,8 @@ if( .blen < 0 ) browser()
 {
 	clsSolver <- match.arg( clsSolver, choices = c('limSolve', 'mgcv')) 
 	clock <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') ) 
+	if ( clock == 'additive' )
+		stop('ARC model not implemented')
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
@@ -393,15 +395,27 @@ if( .blen < 0 ) browser()
 	if (is.na(omega0)){
 		# guess
 		#omega0 <- estimate.mu( tre, sts )
-		g0 <- lm(ape::node.depth.edgelength(tre)[1:length(sts)] ~ sts, na.action = na.omit)
-		omega0sd <- summary( g0 )$coef[2,2]
-		omega0 <- unname( coef(g0)[2] )
-		if (omega0 < 0 ){
-			warning('Root to tip regression predicts a substition rate less than zero. Tree may be poorly rooted or there may be small temporal signal.')
-			omega0 <- abs(omega0)/10
-		}
-		omega0s <- qnorm( unique(sort(c(.5, seq(.025, .975, l=numStartConditions*2) )))  , omega0, sd = omega0sd )
+		# start conditiosn based on rtt
+			g0 <- lm(ape::node.depth.edgelength(tre)[1:length(sts)] ~ sts, na.action = na.omit)
+			omega0sd <- suppressWarnings(summary( g0 ))$coef[2,2]
+			omega0 <- unname( coef(g0)[2] )
+			if (omega0 < 0 ){
+				warning('Root to tip regression predicts a substition rate less than zero. Tree may be poorly rooted or there may be small temporal signal.')
+				omega0 <- abs(omega0)/10
+			}
+			omega0s <- qnorm( unique(sort(c(.5, seq(.001, .999, l=numStartConditions*2) )))  , omega0, sd = omega0sd )
+		#start conditiosn based on earliest sample 
+			D <- ape::cophenetic.phylo( tre ) [1:ape::Ntip(tre), 1:ape::Ntip(tre)]
+			esi <- which.min( sts )[1]
+			g1 <- lm( D[esi,] ~ sts )
+			omega0sd.1 <- suppressWarnings(summary( g1 ))$coef[2,2]
+			omega0.1 <- unname( coef(g1)[2] )
+			omega0s.1 <- qnorm( unique(sort(c(.5, seq(.001, .999, l=numStartConditions*2) )))  , omega0.1, sd = omega0sd.1 )
+		
+		
+		omega0s <- sort( unique( c( omega0s, omega0s.1 ) ))
 		omega0s <- omega0s[ omega0s > 0 ]
+		cat( paste( 'Initial guesses of substitution rate:', paste(collapse=',', omega0s), '\n')  )
 	} else{
 		omega0s <- c( omega0 )
 	}
@@ -575,6 +589,9 @@ if( .blen < 0 ) browser()
 	rv$relaxedClockModel = clock 
 	rv$mu <- mu
 	rv$sp <- sp 
+	rv$omega0 = omega0
+	rv$omega0s = omega0s
+	
 	
 	# add pvals for each edge
 	if (rv$clock=='uncorrelated'){
@@ -629,7 +646,7 @@ if( .blen < 0 ) browser()
 #'        Vector must be named with names corresponding to
 #'        tre$tip.label.
 #' @param s Sequence length (numeric). This should correspond to sequence length used in phylogenetic analysis and will not necessarily be the same as genome length. 
-#' @param omega0 Initial guess of the mean substitution rate (substitutions
+#' @param omega0 Vector providing initial guess or guesses of the mean substitution rate (substitutions
 #'        per site per unit time). If not provided, will guess using
 #'        root to tip regression.
 #' @param minblen Minimum branch length in calendar time. By default, this will
@@ -683,7 +700,7 @@ if( .blen < 0 ) browser()
 #' # modify edge length to represent evolutionary distance with rate 1e-3:
 #' tre$edge.length <- tre$edge.length * 1e-3
 #' # treedater: 
-#' td <- dater( tre, sts =sts )
+#' td <- dater( tre, sts =sts , s = 1000, clock='strict', omega0=.0015)
 #'
 #'
 #' @export 
@@ -695,10 +712,10 @@ dater <- function(tre, sts, s=1e3
  , searchRoot = 5
  , quiet = TRUE
  , temporalConstraints = TRUE
- , clock = c( 'uncorrelated', 'additive', 'strict' )
+ , clock = c('strict' , 'uncorrelated', 'additive')
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
- , numStartConditions = 0
+ , numStartConditions = 1
  , clsSolver=c('limSolve', 'mgcv')
  , meanRateLimits = NULL
  , ncpu = 1
@@ -706,8 +723,11 @@ dater <- function(tre, sts, s=1e3
 )
 { 
 	clsSolver <- match.arg( clsSolver, choices = c('limSolve', 'mgcv'))
-	clock <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') ) 
+	clock <- match.arg( clock , choices = c('strict' , 'uncorrelated', 'additive') ) 
 	# defaults
+	if ( is.na( omega0 ) ){
+		cat('Note: Initial guess of substitution rate not provided. Will attempt to guess starting conditions. Provide initial guesses of the rate using *omega0* parameter. \n')
+	}
 	if (!is.binary( tre ) ){
 		cat( 'Note: *dater* called with non binary tree. Will proceed after resolving polytomies.\n' )
 		if ( !is.rooted( tre )){
@@ -942,12 +962,13 @@ NOTE: The estimated coefficient of variation of clock rates is high (>1). Someti
 		\n')
 		cvprob <- TRUE 
 	}
-	success = requireNamespace('harmonicmeanp', quietly=TRUE)
-	if ( success ){
-	  pp <- harmonicmeanp::p.hmp( p )
-	} else {
-	  pp <- min( p.adjust( p, 'BH' ))
-	}
+	#~ success = requireNamespace('harmonicmeanp', quietly=TRUE)
+	#~ 	if ( success ){
+	#~ 	  pp <- harmonicmeanp::p.hmp( p )
+	#~ 	} else {
+	#~ 	  pp <- min( p.adjust( p, 'BH' ))
+	#~ 	}
+	pp <- min( p.adjust( p, 'BH' ))
 	
 	if ( pp < .025 ){
 		pprob <-  TRUE 
@@ -981,7 +1002,7 @@ NOTE: The p values for lineage clock rates show at least one outlying value afte
 #' # modify edge length to represent evolutionary distance with rate 1e-3:
 #' tre$edge.length <- tre$edge.length * 1e-3
 #' # treedater: 
-#' td <- dater( tre, sts =sts )
+#' td <- dater( tre, sts =sts, clock='strict', s = 1000, omega0=.0015 )
 #' # root to tip regression: 
 #' fit = rootToTipRegressionPlot( td )
 #' summary(fit)
@@ -1014,7 +1035,7 @@ rootToTipRegressionPlot <- function(td, show.tip.labels=FALSE, textopts = NULL, 
 		  , ...
 		)
 		do.call( graphics::points, c( pointopts, list(x =   dT[j] + td$timeOfMRCA, y = dG[j] )))
-		do.call( text, c( list( x = dT[i] + td$timeOfMRCA, y = dG[i] , labels=td$tip.label ), textopts ) )
+		do.call( graphics::text, c( list( x = dT[i] + td$timeOfMRCA, y = dG[i] , labels=td$tip.label ), textopts ) )
 	}
 	graphics::abline( a = coef(mtip)[1], b = coef(mtip)[2], col = 'red' ) 
 	graphics::abline( a = coef(mall)[1], b = coef(mall)[2], col = 'black' ) 
