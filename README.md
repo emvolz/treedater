@@ -17,13 +17,14 @@ install_github( 'emvolz/treedater')
 ## Basic usage
 
 ```
-dater( tre, sts, s)
+dater( tre, sts, s, omega0)
 ```
 
 where 
 * `tre` is an `ape::phylo` phylogeny, 
 * `sts` is a named vector of sample times for each tip in `tre`
 * `s` is the length of the genetic sequences used to estimate `tre`
+* `omega0` is an initial guess of the substitution rate (can be omitted)
 
 For a detailed introduction to features available in `treedater`, see the vignette on analysis of Influena H3N2: `vignette('h3n2')`. 
 
