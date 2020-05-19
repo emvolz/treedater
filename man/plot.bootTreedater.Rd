@@ -4,8 +4,7 @@
 \alias{plot.bootTreedater}
 \title{Plots lineages through time and confidence intervals estimated by bootstrap.}
 \usage{
-\method{plot}{bootTreedater}(x, t0 = NA, res = 100, ggplot = FALSE,
-  cumulative = FALSE, ...)
+\method{plot}{bootTreedater}(x, t0 = NA, res = 100, ggplot = FALSE, cumulative = FALSE, ...)
 }
 \arguments{
 \item{x}{A bootTreedater object produced by *parboot* or *boot*}

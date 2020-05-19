@@ -4,8 +4,13 @@
 \alias{rootToTipRegressionPlot}
 \title{Plot evolutionary distance from root to sample times and estimated internal node times and regression lines}
 \usage{
-rootToTipRegressionPlot(td, show.tip.labels = FALSE, textopts = NULL,
-  pointopts = NULL, ...)
+rootToTipRegressionPlot(
+  td,
+  show.tip.labels = FALSE,
+  textopts = NULL,
+  pointopts = NULL,
+  ...
+)
 }
 \arguments{
 \item{td}{A fitted treedater object}

@@ -4,10 +4,18 @@
 \alias{parboot}
 \title{Estimate of confidence intervals using parametric bootstrap for molecular clock dating.}
 \usage{
-parboot(td, nreps = 100, ncpu = 1, overrideTempConstraint = TRUE,
-  overrideClock = NULL, overrideSearchRoot = TRUE,
-  overrideSeqLength = NULL, quiet = TRUE, normalApproxTMRCA = FALSE,
-  parallel_foreach = FALSE)
+parboot(
+  td,
+  nreps = 100,
+  ncpu = 1,
+  overrideTempConstraint = TRUE,
+  overrideClock = NULL,
+  overrideSearchRoot = TRUE,
+  overrideSeqLength = NULL,
+  quiet = TRUE,
+  normalApproxTMRCA = FALSE,
+  parallel_foreach = FALSE
+)
 }
 \arguments{
 \item{td}{A fitted treedater object}

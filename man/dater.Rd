@@ -4,13 +4,26 @@
 \alias{dater}
 \title{Estimate a time-scaled tree and fit a molecular clock}
 \usage{
-dater(tre, sts, s = 1000, omega0 = NA, minblen = NA, maxit = 100,
-  abstol = 1e-04, searchRoot = 5, quiet = TRUE,
-  temporalConstraints = TRUE, clock = c("strict", "uncorrelated",
-  "additive"), estimateSampleTimes = NULL,
-  estimateSampleTimes_densities = list(), numStartConditions = 1,
-  clsSolver = c("limSolve", "mgcv"), meanRateLimits = NULL, ncpu = 1,
-  parallel_foreach = FALSE)
+dater(
+  tre,
+  sts,
+  s = 1000,
+  omega0 = NA,
+  minblen = NA,
+  maxit = 100,
+  abstol = 1e-04,
+  searchRoot = 5,
+  quiet = TRUE,
+  temporalConstraints = TRUE,
+  clock = c("strict", "uncorrelated", "additive"),
+  estimateSampleTimes = NULL,
+  estimateSampleTimes_densities = list(),
+  numStartConditions = 1,
+  clsSolver = c("limSolve", "mgcv"),
+  meanRateLimits = NULL,
+  ncpu = 1,
+  parallel_foreach = FALSE
+)
 }
 \arguments{
 \item{tre}{An ape::phylo which describes the phylogeny with branches in
