@@ -301,7 +301,6 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 		tu <- Ti[u-td$n]
 		of <- function(tv){
 			.blen <- tv - tu 
-if( .blen < 0 ) browser() 
 			-dst(tv, V) -
 			  dpois( max(0, round(td$tre$edge.length[k]*td$s))
 			  , td$s * .blen * omegas[k] 
@@ -381,8 +380,6 @@ if( .blen < 0 ) browser()
 {
 	clsSolver <- match.arg( clsSolver, choices = c('limSolve', 'mgcv')) 
 	clock <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') ) 
-	if ( clock == 'additive' )
-		stop('ARC model not implemented')
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
 	cc <- 10
@@ -663,7 +660,7 @@ if( .blen < 0 ) browser()
 #'        ancestor node in the phylogeny occurs before all progeny.
 #'        Equivalently, this will preclude negative branch lengths.
 #'        Note that execution is faster if this option is FALSE.
-#' @param clock The choice of molecular clock model. Choices are 'uncorrelated', 'additive', or 'strict'. 
+#' @param clock The choice of molecular clock model. Choices are 'strict'(default), 'uncorrelated', or 'additive' 
 #' @param estimateSampleTimes If some sample times are not known with certainty,
 #'         bounds can be provided with this option. This should take the
 #'         form of a data frame with columns 'lower' and 'upper'

@@ -30,9 +30,9 @@ function (t, tip.dates, topx=1, ncpu = 1, objective = "correlation",  opt.tol = 
 		opt.fun <- function(x) f(x, e[1], e[2])
 		optimize(opt.fun, c(0, 1), maximum = TRUE, tol = opt.tol)$objective
 	})
+	obj.edge[ ut$edge.length<=0 ]  <- -Inf # excludes nodes with zero branch parents 
 	
 	best.edges <- order( obj.edge, decreasing=TRUE)[1:topx]
-	
 	#for (best.edge in best.edges )
 	lapply(best.edges , function(best.edge){
 		best.edge.parent <- ut$edge[best.edge, 1]
@@ -43,11 +43,11 @@ function (t, tip.dates, topx=1, ncpu = 1, objective = "correlation",  opt.tol = 
 		new.root <- list(edge = matrix(c(2L, 1L), 1, 2), tip.label = "new.root", 
 			edge.length = 1, Nnode = 1L, root.edge = 1)
 		class(new.root) <- "phylo"
-		ut <- bind.tree(ut, new.root, where = best.edge.child, position = best.pos * 
+		ut2 <- bind.tree(ut, new.root, where = best.edge.child, position = best.pos * 
 			best.edge.length)
-		ut <- collapse.singles(ut)
-		ut <- root(ut, "new.root")
-		x <- drop.tip(ut, "new.root")
+		ut2 <- collapse.singles(ut2)
+		ut2 <- root(ut2, "new.root")
+		x <- drop.tip(ut2, "new.root")
 		if (!is.rooted(x)) return(NULL)
 		x
 	})-> tres

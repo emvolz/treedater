@@ -63,7 +63,7 @@ ancestor node in the phylogeny occurs before all progeny.
 Equivalently, this will preclude negative branch lengths.
 Note that execution is faster if this option is FALSE.}
 
-\item{clock}{The choice of molecular clock model. Choices are 'uncorrelated', 'additive', or 'strict'.}
+\item{clock}{The choice of molecular clock model. Choices are 'strict'(default), 'uncorrelated', or 'additive'}
 
 \item{estimateSampleTimes}{If some sample times are not known with certainty,
 bounds can be provided with this option. This should take the
