@@ -138,7 +138,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	list( r = r, gammatheta=gammatheta, ll = -o$value)
 }
 
-# additive varianc model of x didelot  
+# additive variance model of x didelot  
 .optim.nbinom1 <- function(  Ti, mu0, sp0, td, lnd.mean.rate.prior)
 {	
 	blen <- .Ti2blen( Ti, td )
@@ -389,7 +389,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	EST_SAMP_TIMES  = ifelse( is.null( tiplabel_est_samp_times ),  FALSE, TRUE)
 	iedge_tiplabel_est_samp_times <- match( tiplabel_est_samp_times, tre$tip.label[tre$edge[,2]] )
 	
-	if (is.na(omega0)){
+	if (any(is.na(omega0))){
 		# guess
 		#omega0 <- estimate.mu( tre, sts )
 		# start conditiosn based on rtt
@@ -401,7 +401,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 				omega0 <- abs(omega0)/10
 			}
 			omega0s <- qnorm( unique(sort(c(.5, seq(.001, .999, l=numStartConditions*2) )))  , omega0, sd = omega0sd )
-		#start conditiosn based on earliest sample 
+		#start conditions based on earliest sample 
 			D <- ape::cophenetic.phylo( tre ) [1:ape::Ntip(tre), 1:ape::Ntip(tre)]
 			esi <- which.min( sts )[1]
 			g1 <- lm( D[esi,] ~ sts )
@@ -722,7 +722,7 @@ dater <- function(tre, sts, s=1e3
 	clsSolver <- match.arg( clsSolver, choices = c('limSolve', 'mgcv'))
 	clock <- match.arg( clock , choices = c('strict' , 'uncorrelated', 'additive') ) 
 	# defaults
-	if ( is.na( omega0 ) ){
+	if ( any(is.na( omega0 )) ){
 		cat('Note: Initial guess of substitution rate not provided. Will attempt to guess starting conditions. Provide initial guesses of the rate using *omega0* parameter. \n')
 	}
 	if (!is.binary( tre ) ){
@@ -810,7 +810,7 @@ dater <- function(tre, sts, s=1e3
 		minblen <- diff(range(sts))/ length(sts) / 10 #TODO choice of this parm is difficult, may require sep optim / crossval
 		cat(paste0('Note: Minimum temporal branch length  (*minblen*) set to ', minblen, '. Increase *minblen* in the event of convergence failures. \n'))
 	}
-	if (!is.na(omega0) & numStartConditions > 0 ){
+	if (all(is.na(omega0)) & numStartConditions > 0 ){
 		warning('omega0 provided incompatible with numStartConditions > 0. Setting numStartConditions to zero.')
 		numStartConditions <- 0
 	}
