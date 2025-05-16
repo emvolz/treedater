@@ -565,6 +565,12 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	rv$tip.label <- tre$tip.label
 	rv$Nnode <- tre$Nnode
 	
+	#check whether node.label exists. If node.label exists in a tree
+	#then it will be copied to rv
+	if(!is.null(tre$node.label)){
+	  rv$node.label <- tre$node.label
+	} 
+	
 	rv$timeOfMRCA <- min(rv$Ti)
 	rv$timeToMRCA <- max(sts) - rv$timeOfMRCA
 	rv$s <- s

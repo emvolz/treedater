@@ -10,3 +10,5 @@
 ^treedater_.*\.tar\.gz$
 ^treedater\.Rcheck$
 ^cran-comments.md$
+^.*\.Rproj$
+^\.Rproj\.user$
