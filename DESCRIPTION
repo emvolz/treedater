@@ -12,4 +12,5 @@ License: GPL-2
 Depends: ape (>= 5.0),limSolve (>= 1.5.5.0)
 Suggests: lubridate,ggplot2,foreach,iterators,mgcv,knitr,rmarkdown
 VignetteBuilder: knitr
-RoxygenNote: 7.1.0
+RoxygenNote: 7.3.2
+Encoding: UTF-8

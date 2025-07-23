@@ -27,7 +27,7 @@ rootToTipRegressionPlot(
 The fitted linear model (class 'lm')
 }
 \description{
-If a range of sample times was given, these will be estimated. Red and black respectively indicate sample and internal nodes. 
+If a range of sample times was given, these will be estimated. Red and black respectively indicate sample and internal nodes.
 This function will print statistics computed from the linear regression model.
 }
 \examples{
@@ -38,9 +38,9 @@ tre <- ape::rtree(50)
 sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
 # modify edge length to represent evolutionary distance with rate 1e-3:
 tre$edge.length <- tre$edge.length * 1e-3
-# treedater: 
+# treedater:
 td <- dater( tre, sts =sts, clock='strict', s = 1000, omega0=.0015 )
-# root to tip regression: 
+# root to tip regression:
 fit = rootToTipRegressionPlot( td )
 summary(fit)
 

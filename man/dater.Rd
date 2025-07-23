@@ -101,7 +101,7 @@ Estimates the calendar time of nodes in the given phylogenetic
 tree with branches in units of substitutions per site. The
 calendar time of each sample must also be specified and the length
 of the sequences used to estimate the tree. If the tree is not
-rooted, this function will estimate the root position. 
+rooted, this function will estimate the root position.
 For an introduction to all options and features, see the vignette on Influenza H3N2: vignette("h3n2")
 
 Multiple molecular clock models are supported including a strict clock and two variations on relaxed clocks. The 'uncorrelated' relaxed clock is the Gamma-Poisson mixture presented by Volz and Frost (2017), while the 'additive' variance model was developed by Didelot & Volz (2019).
@@ -120,7 +120,7 @@ tre <- ape::rtree(50)
 sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
 # modify edge length to represent evolutionary distance with rate 1e-3:
 tre$edge.length <- tre$edge.length * 1e-3
-# treedater: 
+# treedater:
 td <- dater( tre, sts =sts , s = 1000, clock='strict', omega0=.0015)
 
 

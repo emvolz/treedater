@@ -25,8 +25,9 @@ gibbs_jitter(
 \item{res}{Time resolution for proposing new node times}
 
 \item{report}{Report progress after this many iterations. Set to Inf to turn it off}
-
-\item{return}{A list of treedater trees}
+}
+\value{
+A list of treedater trees
 }
 \description{
 This function is useful for 'smoothing out' time trees that have many adjacent small branch lengths (essential polytomies). It returns a list of smoothed trees.
@@ -39,7 +40,7 @@ tre <- ape::rtree(50)
 sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
 # modify edge length to represent evolutionary distance with rate 1e-3:
 tre$edge.length <- tre$edge.length * 1e-3
-# treedater: 
+# treedater:
 td <- dater( tre, sts =sts, clock='strict', s = 1000, omega0=.0015 )
 gibbs_jitter( td )
 }
