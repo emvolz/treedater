@@ -11,7 +11,7 @@ outlierLineages(td, alpha = 0.05, type = c("tips", "internal", "all"))
 
 \item{alpha}{The tail probability used for classifying lineages as outliers}
 
-\item{type}{Should outliers be detected on tip lineages, interal lineages, or all lineages?}
+\item{type}{Should outliers be detected on tip lineages, internal lineages, or all lineages?}
 }
 \value{
 A data frame summarizing for each lineage the p values, adjusted p values ('q'), likelihood, rates, and branch lengths.

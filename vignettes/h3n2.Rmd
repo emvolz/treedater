@@ -99,14 +99,14 @@ rt1 - rt0
 ```
 You can speed up treedater by providing a rooted tree, or by providing an educated guess of the substitution rate, or by using parallel computing with the `ncpu` option.
 
-Note the returned value includes estimated substition rates and TMRCAs. 
+Note the returned value includes estimated substitution rates and TMRCAs. 
 The `dtr` object extends `ape::phylo`, so most of the methods that you can use in other R packages that use that format can also be used with a `dater` object. Lets plot the tree. 
 
 ```{r}
 plot( dtr , no.mar=T, cex = .2 )
 ```
 
-It looks like there are a couple of recent lineages that dont seem to fit well with the ladder-like topology. 
+It looks like there are a couple of recent lineages that don't seem to fit well with the ladder-like topology. 
 We can further examine this by doing a root-to-tip regression using the fitted tree and estimated node times which also shows a couple of outliers:
 ```{r}
 rootToTipRegressionPlot( dtr )
@@ -196,7 +196,7 @@ Note repeated bottlenecks and seasonal peaks of LTT corresponding to when sample
 The package also includes methods for nonparametric bootstrapping if you have already computed a bootstrap distribution of phylogenies. 
 
 ## Missing sample times
-Suppose we only know some of the sample times to the nearest month, a common occurance in viral phylogenetic studies. 
+Suppose we only know some of the sample times to the nearest month, a common occurrence in viral phylogenetic studies. 
 To simulate this, we will put uncertainty bounds on some sample times equal to a +/- 2-week window. 
 We create the following data frame with columns `lower` and `upper`: 
 
@@ -213,4 +213,4 @@ Now re-run treedater with the uncertain sample times. The vector `sts` provided 
 (dtr4 <- dater( tre2, sts, seqlen, clock='strict', estimateSampleTimes = sts.df ) )
 ```
 
-Note that the estimated rates and dates didnt change very much due to uncertain sample dates in this case.   
+Note that the estimated rates and dates didn't change very much due to uncertain sample dates in this case.   

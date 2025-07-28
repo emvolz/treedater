@@ -15,7 +15,7 @@ rootToTipRegressionPlot(
 \arguments{
 \item{td}{A fitted treedater object}
 
-\item{show.tip.labels}{If TRUE, the names of each sample will be plotted at the their corresponding time and evoutionary distance}
+\item{show.tip.labels}{If TRUE, the names of each sample will be plotted at the their corresponding time and evolutionary distance}
 
 \item{textopts}{An optional list of parameters for plotted tip labels. Passed to the *text* function.}
 

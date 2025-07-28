@@ -1,4 +1,4 @@
-#~ Treedater: fast relaxed molecular clock dating 
+#~ Treedater: fast relaxed molecular clock dating
 #~     Copyright (C) 2018  Erik Volz
 #~     This program is free software: you can redistribute it and/or modify
 #~     it under the terms of the GNU General Public License as published by
@@ -12,9 +12,9 @@
 #'
 #' @param td A fitted treedater object
 #' @param alpha The tail probability used for classifying lineages as outliers
-#' @param type Should outliers be detected on tip lineages, interal lineages, or all lineages? 
-#' @return A data frame summarizing for each lineage the p values, adjusted p values ('q'), likelihood, rates, and branch lengths. 
-#' @seealso 
+#' @param type Should outliers be detected on tip lineages, internal lineages, or all lineages?
+#' @return A data frame summarizing for each lineage the p values, adjusted p values ('q'), likelihood, rates, and branch lengths.
+#' @seealso
 #' dater
 #' outlier.tips
 #' @export
@@ -26,55 +26,55 @@ outlierLineages <- function(td, alpha = .05, type=c('tips','internal', 'all')){
 	lls <- td$edge_lls
 	p <- td$edge.p
 	p[ p > .5] <- 1 - p[ p > .5]
-	p <- p * 2 
+	p <- p * 2
 	n <- length( td$tip.label )
 	tipEdges <- which( td$edge[,2] <= n )
 	intEdges <- setdiff( 1:nrow(td$edge), tipEdges )
 	if ( type == 'tips'){
 		qu.df <- data.frame( taxon = td$tip.label[ td$edge[tipEdges,2]]
 		  , q = unname( p.adjust( p[tipEdges], method = 'fdr' ) )
-		  , p  = unname( p[tipEdges] ) 
+		  , p  = unname( p[tipEdges] )
 		  , loglik = unname( lls[tipEdges])
 		  , rates = unname( td$omegas[tipEdges] )
-		  , branch.length = td$edge.length[ tipEdges] 
+		  , branch.length = td$edge.length[ tipEdges]
 		)
 		rownames(qu.df) <- qu.df$taxon
 	} else if ( type == 'internal'){
-		qu.df <- data.frame( 
+		qu.df <- data.frame(
 		   q = unname( p.adjust( p[intEdges], method = 'fdr' ) )
-		  , p  = unname( p[intEdges] ) 
+		  , p  = unname( p[intEdges] )
 		  , loglik = unname( lls[intEdges])
 		  , rates = unname( td$omegas[intEdges] )
-		  , branch.length = td$edge.length[ intEdges ] 
+		  , branch.length = td$edge.length[ intEdges ]
 		  , edgeIndex = intEdges
 		)
 		#rownames(qu.df) <- qu.df$intEdges
 	} else{
 		qu.df <- data.frame(
 		   q = unname( p.adjust( p, method = 'fdr' ) )
-		  , p  = unname( p ) 
+		  , p  = unname( p )
 		  , loglik = unname( lls)
 		  , rates = unname( td$omegas )
-		  , branch.length = td$edge.length 
+		  , branch.length = td$edge.length
 		  , edgeIndex = 1:nrow(td$edge)
 		)
 	}
 	qu.df <- qu.df[ order( qu.df$q), ]
-	
+
 	qu.df1 <- qu.df[ qu.df$q <  alpha , ]
-	
+
 	print( qu.df1 )
 	qu.df
 }
 
 #' Detect terminal lineages with unusually large evolutionary divergence under the fitted treedater model
 #'
-#' This is a convient wrapper of the *outlier.lineages*
+#' This is a convenient wrapper of the *outlier.lineages*
 #'
 #' @param td A fitted treedater object
 #' @param alpha The tail probability used for classifying lineages as outliers
-#' @return A data frame summarizing for each lineage the p values, adjusted p values ('q'), likelihood, rates, and branch lengths. 
-#' @seealso 
+#' @return A data frame summarizing for each lineage the p values, adjusted p values ('q'), likelihood, rates, and branch lengths.
+#' @seealso
 #' dater
 #' outlier.lineages
 #' @export

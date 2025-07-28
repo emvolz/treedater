@@ -15,7 +15,7 @@ outlierTips(td, alpha = 0.05)
 A data frame summarizing for each lineage the p values, adjusted p values ('q'), likelihood, rates, and branch lengths.
 }
 \description{
-This is a convient wrapper of the *outlier.lineages*
+This is a convenient wrapper of the *outlier.lineages*
 }
 \seealso{
 dater

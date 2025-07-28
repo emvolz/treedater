@@ -2,7 +2,7 @@
 % Please edit documentation in R/treedater0.R
 \name{sampleYearsFromLabels}
 \alias{sampleYearsFromLabels}
-\title{Compute a vector of numeric sample times from labels in a sequence aligment or phylogeny}
+\title{Compute a vector of numeric sample times from labels in a sequence alignment or phylogeny}
 \usage{
 sampleYearsFromLabels(
   tips,
@@ -27,7 +27,7 @@ sampleYearsFromLabels(
 Numeric vector with sample time in decimal format.
 }
 \description{
-Compute a vector of numeric sample times from labels in a sequence aligment or phylogeny
+Compute a vector of numeric sample times from labels in a sequence alignment or phylogeny
 }
 \examples{
 ## A couple of labels for Ebola virus sequences:

@@ -18,7 +18,7 @@ gibbs_jitter(
 
 \item{iter}{Number of iterations (every node time is resampled in each iteration )}
 
-\item{burn_pc}{Remove this proportion as burnin}
+\item{burn_pc}{Remove this proportion as burn-in}
 
 \item{returnTrees}{Integer number of trees to return.}
 

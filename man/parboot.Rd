@@ -24,9 +24,9 @@ parboot(
 
 \item{ncpu}{Number of threads to use for parallel computation. Recommended.}
 
-\item{overrideTempConstraint}{If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution.}
+\item{overrideTempConstraint}{If TRUE (default) will not enforce positive branch lengths in simulation replicates. Will speed up execution.}
 
-\item{overrideClock}{May be 'strict' or 'additive' or 'uncorrelated' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td}
+\item{overrideClock}{May be 'strict' or 'additive' or 'uncorrelated' in which case will force simulations to fit the corresponding model. If omitted, will inherit the clock model from td}
 
 \item{overrideSearchRoot}{If TRUE, will re-use root position from input treedater tree. Otherwise may re-estimate root position in simulations}
 
@@ -39,7 +39,7 @@ parboot(
 \item{parallel_foreach}{If TRUE will use the foreach package for parallelization. May work better on HPC systems.}
 }
 \value{
-A list with elements 
+A list with elements
 \itemize{
 \item trees: The fitted treedater objects corresponding to each simulation
 \item meanRates: Vector of estimated rates for each simulation
@@ -73,9 +73,9 @@ tre <- ape::rtree(25)
 sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
 # modify edge length to represent evolutionary distance with rate 1e-3:
 tre$edge.length <- tre$edge.length * 1e-3
-# treedater: 
+# treedater:
 td <- dater( tre, sts=sts, s=1000, clock='strict', omega0=.0015 )
-# parametric bootstrap: 
+# parametric bootstrap:
 pb <- parboot( td, nreps=25 )
 # plot lineages through time
 plot( pb )

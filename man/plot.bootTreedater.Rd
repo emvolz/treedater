@@ -17,7 +17,7 @@
 
 \item{cumulative}{If TRUE, will show only decreasing lineages through time}
 
-\item{...}{Additional arg's are passed to *ggplot* or *plot*}
+\item{...}{Additional arguments are passed to *ggplot* or *plot*}
 }
 \description{
 Plots lineages through time and confidence intervals estimated by bootstrap.

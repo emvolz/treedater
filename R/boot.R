@@ -1,4 +1,4 @@
-#~ Treedater: fast relaxed molecular clock dating 
+#~ Treedater: fast relaxed molecular clock dating
 #~     Copyright (C) 2018  Erik Volz
 #~     This program is free software: you can redistribute it and/or modify
 #~     it under the terms of the GNU General Public License as published by
@@ -24,19 +24,19 @@
 #'      inspecting the output from each fitted treedater object, which is
 #'      contained in the $trees attribute.
 #'
-#' @param td A fitted treedater object 
-#' @param nreps Integer number of simulations to be carried out 
+#' @param td A fitted treedater object
+#' @param nreps Integer number of simulations to be carried out
 #' @param ncpu Number of threads to use for parallel computation. Recommended.
-#' @param overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution. 
-#' @param overrideClock May be 'strict' or 'additive' or 'uncorrelated' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td
+#' @param overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simulation replicates. Will speed up execution.
+#' @param overrideClock May be 'strict' or 'additive' or 'uncorrelated' in which case will force simulations to fit the corresponding model. If omitted, will inherit the clock model from td
 #' @param overrideSearchRoot If TRUE, will re-use root position from input treedater tree. Otherwise may re-estimate root position in simulations
 #' @param overrideSeqLength Optional sequence length to use in simulations
 #' @param quiet If TRUE will minimize output printed to screen
 #' @param normalApproxTMRCA If TRUE will use estimate standard deviation from simulation replicates and report confidence interval based on normal distribution
-#' @param parallel_foreach If TRUE will use the foreach package for parallelization. May work better on HPC systems. 
+#' @param parallel_foreach If TRUE will use the foreach package for parallelization. May work better on HPC systems.
 #'
-#' @return 
-#' A list with elements 
+#' @return
+#' A list with elements
 #' \itemize{
 #' \item trees: The fitted treedater objects corresponding to each simulation
 #' \item meanRates: Vector of estimated rates for each simulation
@@ -58,14 +58,14 @@
 #' sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
 #' # modify edge length to represent evolutionary distance with rate 1e-3:
 #' tre$edge.length <- tre$edge.length * 1e-3
-#' # treedater: 
+#' # treedater:
 #' td <- dater( tre, sts=sts, s=1000, clock='strict', omega0=.0015 )
-#' # parametric bootstrap: 
+#' # parametric bootstrap:
 #' pb <- parboot( td, nreps=25 )
 #' # plot lineages through time
 #' plot( pb )
 #'
-#' @export 
+#' @export
 parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, overrideClock=NULL, overrideSearchRoot=TRUE, overrideSeqLength = NULL, quiet=TRUE, normalApproxTMRCA=FALSE, parallel_foreach = FALSE )
 {
 	k = 0 # resolve NOTE about 'visible binding for global variable'
@@ -87,7 +87,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			class(tre) <- 'phylo'
 			blen <- pmax( 1e-12, td$edge.length )
 			if( td$clock == 'strict' ) {
-				# simulate poisson 
+				# simulate poisson
 				tre$edge.length <- rpois(length(tre$edge.length), blen * td$mean.rate * td$s ) / td$s
 			} else if (td$clock=='uncorrelated') {
 				#ps <- pmin(1 - 1e-5, td$theta*blen  / ( 1+ td$theta * blen ) )
@@ -97,7 +97,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 				 , 1 - ps
 				) / td$s
 			} else if ( td$clock=='additive'){
-				sizes = td$mu * blen / td$sp 
+				sizes = td$mu * blen / td$sp
 				tre$edge.length <- rnbinom( length(td$edge.length)
 				 , sizes
 				 , 1 - td$sp / ( 1 + td$sp )
@@ -105,7 +105,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			} else{
 				stop( '*clock* not supported' )
 			}
-			
+
 			if (!td$intree_rooted & !overrideSearchRoot) tre <- unroot( tre )
 			est <- NULL
 			if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
@@ -116,17 +116,17 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 				if (is.na(overrideClock)) stop('overrideClock NA. Stopping.')
 				clock <- overrideClock
 			}
-			
+
 			seqlen <- ifelse( is.null(overrideSeqLength) , td$s, overrideSeqLength )
 			td2 <- tryCatch({dater(tre, td$sts, s= seqlen
 			 , omega0 = NA
 			 , minblen = td$minblen
 			 , quiet = TRUE
 			 , temporalConstraints = tempConstraint
-			 , clock = clock 
+			 , clock = clock
 			 , estimateSampleTimes = est
 			 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
-			 , numStartConditions = td$numStartConditions 
+			 , numStartConditions = td$numStartConditions
 			 , meanRateLimits = td$meanRateLimits
 			)}, error =function(e) NULL )
 			if (suppressWarnings( is.null( td2)) ) return (NULL )
@@ -149,7 +149,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 					capture.output( { pbrk <- .parboot.replicate(k) })
 				else
 					 pbrk <- .parboot.replicate(k)
-				pbrk 
+				pbrk
 			}
 		} else{
 			tds <- parallel::mclapply( 1:nreps, function(k) {
@@ -159,7 +159,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 					pbrk <- .parboot.replicate(k)
 				pbrk
 			}
-			, mc.cores = ncpu ) 
+			, mc.cores = ncpu )
 		}
 	} else{
 		tds <- lapply( 1:nreps, function(k) {
@@ -170,7 +170,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 			pbrk
 		})
 	}
-	tds <- tds[ !sapply(tds,  is.null)  ] 
+	tds <- tds[ !sapply(tds,  is.null)  ]
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
 	# output rate CIs, parameter CIs, trees
 	meanRates <- unlist( sapply( tds, function(td) td$mean.rate ) )
@@ -187,7 +187,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 	if (td$timeOf < timeOfMRCA_CI[1] | td$timeOf > timeOfMRCA_CI[2] ){
 		warning( 'Parametric bootstrap CI does not cover the point estimate. Try non-parametric bootstrap *boot.treedater*. ')
 	}
-	rv <- list( 
+	rv <- list(
 		trees = tds
 		, meanRates = meanRates
 		, meanRate_CI = c( exp( log(td$mean.rate) - log_mr_sd*1.96), exp(log(td$mean.rate) + log_mr_sd*1.96 ))
@@ -203,7 +203,7 @@ parboot <- function( td , nreps = 100, ncpu = 1,  overrideTempConstraint=TRUE, o
 	rv
 }
 
-# ensure that tip composition of btres is same as treedater tree 
+# ensure that tip composition of btres is same as treedater tree
 .boot.trees <- function (td, btres)
 {
 sapply( btres, function(btre ){
@@ -228,18 +228,18 @@ all(x)
 #'      inspecting the output from each fitted treedater object, which is
 #'      contained in the $trees attribute.
 #'
-#' @param td A fitted treedater object 
-#' @param tres A list or multiPhylo with bootstrap trees with branches in units of substitutions per site 
+#' @param td A fitted treedater object
+#' @param tres A list or multiPhylo with bootstrap trees with branches in units of substitutions per site
 #' @param ncpu Number of threads to use for parallel computation. Recommended.
 #' @param searchRoot See *dater*
-#' @param overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution. 
-#' @param overrideClock May be 'strict' or 'additive' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td
+#' @param overrideTempConstraint If TRUE (default) will not enforce positive branch lengths in simulation replicates. Will speed up execution.
+#' @param overrideClock May be 'strict' or 'additive' or 'relaxed' in which case will force simulations to fit the corresponding model. If omitted, will inherit the clock model from td
 #' @param quiet If TRUE will minimize output printed to screen
 #' @param normalApproxTMRCA If TRUE will use estimate standard deviation from simulation replicates and report confidence interval based on normal distribution
-#' @param parallel_foreach If TRUE will use the foreach package for parallelization. May work better on HPC systems. 
+#' @param parallel_foreach If TRUE will use the foreach package for parallelization. May work better on HPC systems.
 #'
-#' @return 
-#' A list with elements 
+#' @return
+#' A list with elements
 #' \itemize{
 #' \item trees: The fitted treedater objects corresponding to each simulation
 #' \item meanRates: Vector of estimated rates for each simulation
@@ -254,8 +254,8 @@ all(x)
 #'
 #' @author Erik M Volz <erik.volz@gmail.com>
 #'
-#' @examples 
-#' # simulate a tree 
+#' @examples
+#' # simulate a tree
 #' tre <- ape::rtree(25)
 #' # sample times based on distance from root to tip:
 #' sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
@@ -264,18 +264,18 @@ all(x)
 #' bootTrees <- lapply( 1:25, function(i) {
 #' 	.tre <- tre
 #' 	.tre$edge.length <- tre$edge.length * pmax(rnorm( length(tre$edge.length), 1e-3, 1e-4 ), 0 )
-#' 	.tre 
+#' 	.tre
 #' })
 #' tre$edge.length <- tre$edge.length * 1e-3
 #' # run treedater
 #' td <- dater( tre, sts, s= 1000, clock='strict', omega0=.0015  )
-#' # bootstrap: 
+#' # bootstrap:
 #' ( tdboot <- boot( td, bootTrees ) )
 #' # plot lineages through time :
 #' plot( tdboot )
 #'
 #'
-#' @export 
+#' @export
 boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRUE,  overrideClock=NULL, quiet=TRUE, normalApproxTMRCA=FALSE, parallel_foreach = FALSE )
 {
 	k = 0 # resolve NOTE about 'visible binding for global variable'
@@ -296,7 +296,7 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 	{
 		if (is.null(k)) k <- sample.int( length(tres), size=1)
 		tre <- tres[[k]]
-		
+
 		est <- NULL
 		if (td$EST_SAMP_TIMES) est <- td$estimateSampleTimes
 		tempConstraint <- td$temporalConstraints
@@ -312,14 +312,14 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 		 , quiet = TRUE
 		 , searchRoot = searchRoot
 		 , temporalConstraints = tempConstraint
-		 , clock = clock 
+		 , clock = clock
 		 , estimateSampleTimes = est
 		 , estimateSampleTimes_densities = td$estimateSampleTimes_densities
-		 , numStartConditions = td$numStartConditions 
+		 , numStartConditions = td$numStartConditions
 		 , meanRateLimits = td$meanRateLimits
 		)}, error =function(e) NA )
 		if (suppressWarnings( is.na( td2[1])) ) return (NA )
-			
+
 		if (!quiet){
 			cat('\n #############################\n')
 			cat( paste( '\n Replicate', k, 'complete \n' ))
@@ -327,7 +327,7 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 		}
 		td2
 	}
-	
+
 	if (ncpu > 1)
 	{
 		if (parallel_foreach){
@@ -337,9 +337,9 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 			tds <- foreach::foreach( k = 1:nreps, .packages=c('treedater') ) %dopar% {
 				if (quiet)
 				 capture.output( { brk <- .boot.replicate(k) })
-				else 
+				else
 					brk <- .boot.replicate(k)
-				 brk 
+				 brk
 			}
 		} else{
 			tds <- parallel::mclapply( 1:nreps, function(k) {
@@ -347,9 +347,9 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 					capture.output( { brk <- .boot.replicate(k) })
 				else
 					brk <- .boot.replicate(k)
-				brk 
+				brk
 			}
-			, mc.cores = ncpu ) 
+			, mc.cores = ncpu )
 		}
 	} else{
 		tds <- lapply( 1:nreps, function(k) {
@@ -357,10 +357,10 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 				capture.output( { brk <- .boot.replicate(k) })
 			else
 				brk <- .boot.replicate(k)
-			brk 
+			brk
 		})
 	}
-	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ] 
+	tds <- tds[!suppressWarnings ( sapply(tds, function(td) is.na(td[1]) ) )  ]
 	if (length(tds)==0) stop('All bootstrap replicate failed with error.')
 	# output rate CIs, parameter CIs, trees
 	meanRates <- sapply( tds, function(td) td$mean.rate )
@@ -374,7 +374,7 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 	} else {
 		timeOfMRCA_CI <- quantile( tmrcas, p = c(.025, .975 ))
 	}
-	rv <- list( 
+	rv <- list(
 		trees = tds
 		, meanRates = meanRates
 		, meanRate_CI = c( exp( log(td$meanRate) - log_mr_sd*1.96), exp(log(td$mean.rate) + log_mr_sd*1.96 ))
@@ -404,25 +404,25 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 #'      This function will print the optimal clock model
 #'      and the distribution of the coefficient of variation statistic under the null hypothesis (strict
 #'      clock). Parameters passed to this function should be the same as when calling *dater*.
-#' 
+#'
 #' @param ... arguments passed to *dater*
 #' @param nreps Integer number of simulations
 #' @param overrideTempConstraint see *parboot*
 #' @param ncpu Number of threads to use for parallel computation. Recommended.
-#' 
+#'
 #' @return  A list with elements:
 #' \itemize{
 #' \item strict_treedater: A dater object under a strict clock
 #' \item relaxed_treedater: A dater object under a relaxed clock
-#' \item clock: The favoured clock model 
+#' \item clock: The favored clock model
 #' \item parboot: Result of call to *parboot* using fitted treedater and forcing a relaxed clock
 #' \item nullHypothesis_coef_of_variation_CI: The null hypothesis CV
 #' }
 #'
 #' @author Erik M Volz <erik.volz@gmail.com>
 #'
-#' @examples 
-#' # simulate a tree 
+#' @examples
+#' # simulate a tree
 #' tre <- ape::rtree(25)
 #' # sample times based on distance from root to tip:
 #' sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
@@ -431,7 +431,7 @@ boot <- function( td, tres,  ncpu = 1, searchRoot=1 , overrideTempConstraint=TRU
 #' relaxedClockTest( tre, sts, s= 1000,  omega0=.0015 , nreps=25)
 #'
 #'
-#' @export 
+#' @export
 relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T , ncpu =1 )
 {
 	argnames <- names(list(...))
@@ -441,7 +441,7 @@ relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T , ncpu =1
 	 , overrideClock = 'uncorrelated' , ncpu = ncpu )
 	})
 	cvci_null <- pbtd$coef_of_variation_CI
-	
+
 	tdrc <- dater(..., clock='uncorrelated')
 	clock <- 'strict'
 	if ( tdrc$coef_of_variation > cvci_null[2] ){
@@ -451,7 +451,7 @@ relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T , ncpu =1
 	cat( paste( 'Null distribution of rate coefficient of variation:', paste(cvci_null, collapse=' '), '\n'))
 	cat('Returning best treedater fit\n')
 	list( strict_treedater = td
-	 , relaxed_treedater = tdrc 
+	 , relaxed_treedater = tdrc
 	 , clock = clock
 	 , parboot = pbtd
 	 , nullHypothesis_coef_of_variation_CI = cvci_null
@@ -460,11 +460,11 @@ relaxedClockTest <- function( ..., nreps=100, overrideTempConstraint=T , ncpu =1
 
 ##
 
-#' @export 
+#' @export
 print.bootTreedater = print.boot.treedater <- function( x, ... )
 {
 	stopifnot(inherits(x, "bootTreedater"))
-	rns <- c( 'Time of common ancestor' 
+	rns <- c( 'Time of common ancestor'
 	  , 'Mean substitution rate'
 	)
 	cns <- c( 'pseudo ML'
@@ -472,8 +472,8 @@ print.bootTreedater = print.boot.treedater <- function( x, ... )
 	 , paste( round(100*(1-x$alpha/2), digits=3), '%')
 	)
 	o <- data.frame( pseudoML= c(x$td$timeOfMRCA, x$td$mean.rate)
-	 , c( x$timeOfMRCA_CI[1], x$meanRate_CI[1])  
-	 , c( x$timeOfMRCA_CI[2], x$meanRate_CI[2] )  
+	 , c( x$timeOfMRCA_CI[1], x$meanRate_CI[1])
+	 , c( x$timeOfMRCA_CI[2], x$meanRate_CI[2] )
 	)
 	rownames(o) <- rns
 	colnames(o) <- cns
@@ -482,15 +482,15 @@ print.bootTreedater = print.boot.treedater <- function( x, ... )
 	invisible(x)
 }
 
-#' Plots lineages through time and confidence intervals estimated by bootstrap. 
+#' Plots lineages through time and confidence intervals estimated by bootstrap.
 #'
 #' @param x A bootTreedater object produced by *parboot* or *boot*
 #' @param t0 The lower bound of the time axis to show
 #' @param res The number of time points on the time axis
 #' @param ggplot If TRUE, will return a plot made with the ggplot2 package
 #' @param cumulative If TRUE, will show only decreasing lineages through time
-#' @param ... Additional arg's are passed to *ggplot* or *plot*
-#' @export 
+#' @param ... Additional arguments are passed to *ggplot* or *plot*
+#' @export
 plot.bootTreedater <- function(x, t0 = NA, res = 100, ggplot=FALSE, cumulative=FALSE, ... )
 {
 	pbtd = x
@@ -501,26 +501,26 @@ plot.bootTreedater <- function(x, t0 = NA, res = 100, ggplot=FALSE, cumulative=F
 	if (cumulative)
 	{
 		cbind( times = times , t( sapply( times, function(t){
-			c( pml = length(pbtd$td$sts) - sum( pbtd$td$Ti>t ) 
+			c( pml = length(pbtd$td$sts) - sum( pbtd$td$Ti>t )
 				, setNames(quantile( sapply( pbtd$trees, function(tre ) length(pbtd$td$sts) - sum( tre$Ti > t ) )
-				 , probs = c( .025, .5, .975 ) 
+				 , probs = c( .025, .5, .975 )
 				), c('lb', 'median', 'ub') )
 			)
 		}))) -> ltt
 	} else{
 		cbind( times = times , t( sapply( times, function(t){
-			c( pml = sum(pbtd$td$sts > t ) - sum( pbtd$td$Ti>t ) 
+			c( pml = sum(pbtd$td$sts > t ) - sum( pbtd$td$Ti>t )
 				, setNames(quantile( sapply( pbtd$trees, function(tre ) sum( tre$sts > t) - sum( tre$Ti > t ) )
-				 , probs = c( .025, .5, .975 ) 
+				 , probs = c( .025, .5, .975 )
 				), c('lb', 'median', 'ub') )
 			)
 		}))) -> ltt
 	}
 	# resolve NOTE about 'no visible binding for global variables'
 	pml = NULL
-	ub = NULL 
+	ub = NULL
 	lb = NULL
-	
+
 	pl.df <- as.data.frame( ltt )
 	if (ggplot){
 		success = requireNamespace('ggplot2', quietly=TRUE)
@@ -530,10 +530,10 @@ plot.bootTreedater <- function(x, t0 = NA, res = 100, ggplot=FALSE, cumulative=F
 		return (p <- p + ggplot2::ylab( 'Lineages through time') + ggplot2::xlab('Time')  )
 	}
 	with( pl.df ,{
-		graphics::plot( times, lb, type = 'l', lty = 3, lwd = 1, xlab = 'Time', ylab= 'Lineages through time'#, main='' 
+		graphics::plot( times, lb, type = 'l', lty = 3, lwd = 1, xlab = 'Time', ylab= 'Lineages through time'#, main=''
 		  , ylim = c(0, max(ub)+1)  , ...)
 		graphics::lines( times, ub, lty = 3, lwd = 1)
-		graphics::lines( times, pml, lwd = 2) 
+		graphics::lines( times, pml, lwd = 2)
 	})
 }
 

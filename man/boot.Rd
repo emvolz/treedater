@@ -25,9 +25,9 @@ boot(
 
 \item{searchRoot}{See *dater*}
 
-\item{overrideTempConstraint}{If TRUE (default) will not enforce positive branch lengths in simualtion replicates. Will speed up execution.}
+\item{overrideTempConstraint}{If TRUE (default) will not enforce positive branch lengths in simulation replicates. Will speed up execution.}
 
-\item{overrideClock}{May be 'strict' or 'additive' or 'relaxed' in which case will force simulations to fit the corresponding model. If ommitted, will inherit the clock model from td}
+\item{overrideClock}{May be 'strict' or 'additive' or 'relaxed' in which case will force simulations to fit the corresponding model. If omitted, will inherit the clock model from td}
 
 \item{quiet}{If TRUE will minimize output printed to screen}
 
@@ -36,7 +36,7 @@ boot(
 \item{parallel_foreach}{If TRUE will use the foreach package for parallelization. May work better on HPC systems.}
 }
 \value{
-A list with elements 
+A list with elements
 \itemize{
 \item trees: The fitted treedater objects corresponding to each simulation
 \item meanRates: Vector of estimated rates for each simulation
@@ -57,7 +57,7 @@ If the original treedater fit estimated the root position, root
      contained in the $trees attribute.
 }
 \examples{
-# simulate a tree 
+# simulate a tree
 tre <- ape::rtree(25)
 # sample times based on distance from root to tip:
 sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.label)
@@ -66,12 +66,12 @@ sts <- setNames( ape::node.depth.edgelength( tre )[1:ape::Ntip(tre)], tre$tip.la
 bootTrees <- lapply( 1:25, function(i) {
 	.tre <- tre
 	.tre$edge.length <- tre$edge.length * pmax(rnorm( length(tre$edge.length), 1e-3, 1e-4 ), 0 )
-	.tre 
+	.tre
 })
 tre$edge.length <- tre$edge.length * 1e-3
 # run treedater
 td <- dater( tre, sts, s= 1000, clock='strict', omega0=.0015  )
-# bootstrap: 
+# bootstrap:
 ( tdboot <- boot( td, bootTrees ) )
 # plot lineages through time :
 plot( tdboot )
