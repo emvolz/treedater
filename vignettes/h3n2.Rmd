@@ -55,7 +55,7 @@ Note that you may need to modify the first line of the `tdcl` script with the co
 This data set comprises 177 HA sequences collected over 35 years worldwide with known date of sampling.
 We estimated a maximum likelihood tree using [iqtree](http://www.iqtree.org/). 
 We will use the sample dates and ML tree to fit a molecular clock and estimate a dated phylogeny. 
-First, load the tree (any method can be used to load a phylogeny into [ape::phylo format](http://ape-package.ird.fr/)): 
+First, load the tree (any method can be used to load a phylogeny into [ape::phylo format](https://emmanuelparadis.github.io/)): 
 
 ```{r}
 require(treedater)

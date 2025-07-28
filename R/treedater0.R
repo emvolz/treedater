@@ -749,7 +749,7 @@ dater <- function(tre, sts, s=1e3
 	lnd.mean.rate.prior <- function(x) 0 #dunif( x , 0, Inf, log=TRUE )
 	if (is.null( meanRateLimits) ) {
 		meanRateLimits <- c( 0, Inf)
-	} else if ( class(meanRateLimits)=='function'){
+	} else if ( is.function(meanRateLimits)){
 		lnd.mean.rate.prior <- meanRateLimits
 		meanRateLimits <- c(0, Inf)
 	} else{
@@ -767,7 +767,7 @@ dater <- function(tre, sts, s=1e3
 	if (is.null(estimateSampleTimes)) EST_SAMP_TIMES <- FALSE
 	tiplabel_est_samp_times <- NULL
 	if (EST_SAMP_TIMES){
-		if (class(estimateSampleTimes)=='data.frame'){
+		if (is.data.frame(estimateSampleTimes)){
 			if ( !('lower' %in% colnames(estimateSampleTimes)) | !('upper' %in% colnames(estimateSampleTimes) ) ){
 				stop(EST_SAMP_TIMES_ERR)
 			}
