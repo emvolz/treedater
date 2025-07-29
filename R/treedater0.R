@@ -1,5 +1,5 @@
 #~ Treedater: fast relaxed molecular clock dating
-#~     Copyright (C) 2018  Erik Volz
+#~     Copyright (C) 2025  Erik Volz
 #~     This program is free software: you can redistribute it and/or modify
 #~     it under the terms of the GNU General Public License as published by
 #~     the Free Software Foundation, either version 3 of the License, or
@@ -113,13 +113,14 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 .optim.r.gammatheta.nbinom0 <- function(  Ti, r0, gammatheta0, td, lnd.mean.rate.prior)
 {
 	blen <- .Ti2blen( Ti, td )
-
+	MINR <- 1e-3
+	MAXR <- 1e3 
 	#NOTE relative to wikipedia page on NB:
 	#size = r
 	#1-prob = p
 	of <- function(x)
 	{
-		r <- max(1e-3, exp( x['lnr'] ) )
+		r <- min(MAXR, max(MINR, exp( x['lnr'] ) ) )
 		gammatheta <- exp( x['lngammatheta'] )
 		if (is.infinite(r) | is.infinite(gammatheta)) return(Inf)
 		ps <- pmin(1 - 1e-5, gammatheta*blen / ( 1+ gammatheta * blen ) )
@@ -133,7 +134,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	#o <- optim( par = x0, fn = of, method = 'BFGS' )
 	if ( is.infinite( of( x0 )) ) stop( 'Can not optimize rate parameters from initial conditions. Try adjusting *meanRateLimits*.' )
 	o <- optim( par = x0, fn = of)
-	r <- unname( exp( o$par['lnr'] ))
+	r <- min(MAXR, max(MINR, unname( exp( o$par['lnr'] )) ))
 	gammatheta <- unname( exp( o$par['lngammatheta'] ))
 	list( r = r, gammatheta=gammatheta, ll = -o$value)
 }
@@ -636,8 +637,9 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #' Multiple molecular clock models are supported including a strict clock and two variations on relaxed clocks. The 'uncorrelated' relaxed clock is the Gamma-Poisson mixture presented by Volz and Frost (2017), while the 'additive' variance model was developed by Didelot & Volz (2019).
 #'
 #' @section References:
-#' E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
-#' X. Didelot and Volz, E.M. (2019) Additive uncorrelated relaxed clock models.
+#' Volz, E. M., & Frost, S. D. (2017). Scalable relaxed clock phylogenetic dating. Virus evolution, 3(2), vex025.
+#' 
+#' Didelot, X., Siveroni, I., & Volz, E. M. (2021). Additive uncorrelated relaxed clock models for the dating of genomic epidemiology phylogenies. Molecular Biology and Evolution, 38(1), 307-317.
 #'
 #' @param tre An ape::phylo which describes the phylogeny with branches in
 #'        units of substitutions per site. This may be a rooted or

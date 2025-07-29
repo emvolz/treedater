@@ -108,8 +108,9 @@ Multiple molecular clock models are supported including a strict clock and two v
 }
 \section{References}{
 
-E.M. Volz and Frost, S.D.W. (2017) Scalable relaxed clock phylogenetic dating. Virus Evolution.
-X. Didelot and Volz, E.M. (2019) Additive uncorrelated relaxed clock models.
+Volz, E. M., & Frost, S. D. (2017). Scalable relaxed clock phylogenetic dating. Virus evolution, 3(2), vex025.
+
+Didelot, X., Siveroni, I., & Volz, E. M. (2021). Additive uncorrelated relaxed clock models for the dating of genomic epidemiology phylogenies. Molecular Biology and Evolution, 38(1), 307-317.
 }
 
 \examples{
