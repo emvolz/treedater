@@ -7,8 +7,7 @@ Authors@R: c(person("Erik", "Volz", role = c("aut", "cre"),
                      email = "erik.volz@gmail.com") )
 Author: Erik Volz [aut, cre]
 Maintainer: Erik Volz <erik.volz@gmail.com>
-Description: Functions for estimating times of common ancestry and molecular clock rates of evolution using a variety of evolutionary models, parametric and nonparametric bootstrap confidence intervals, methods for detecting outlier lineages, root-to-tip regression, and a statistical test for selecting molecular clock models.
-Citation: Volz, E.M. and S.D.W. Frost (2017) <doi:10.1093/ve/vex025>
+Description: Functions for estimating times of common ancestry and molecular clock rates of evolution using a variety of evolutionary models, parametric and nonparametric bootstrap confidence intervals, methods for detecting outlier lineages, root-to-tip regression, and a statistical test for selecting molecular clock models. For more details see Volz and Frost (2017) <doi:10.1093/ve/vex025>.
 License: GPL-2
 Depends: ape (>= 5.0),limSolve (>= 1.5.5.0)
 Suggests: lubridate,ggplot2,foreach,iterators,mgcv,knitr,rmarkdown
