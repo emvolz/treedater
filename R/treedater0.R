@@ -183,7 +183,44 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 
 
 
+# Unconstrained (temporalConstraints=FALSE) node-time solve via the sparse tree Laplacian:
+# x = (A'WA)^-1 A'WB as a single sparse-Cholesky (CHOLMOD) solve -- O(n) instead of the
+# dense O(n^3) `lm`.  Being unconstrained there is no active set, so this can NEVER hit the
+# degeneracy/fallback of the constrained solver.  Returns NULL (caller uses the dense `lm`)
+# if the Matrix package is unavailable or the factor is singular.
+.optim.Ti0.sparse <- function( omegas, td, scale_var_by_rate = FALSE ){
+	if (!requireNamespace('Matrix', quietly = TRUE)) return(NULL)
+	n <- td$n; p <- n - 1L; edge <- td$tre$edge
+	W <- if (scale_var_by_rate) td$W0 / omegas else td$W0
+	Badj <- td$B0
+	Badj[td$tipEdges] <- td$B0[td$tipEdges] - unname( omegas[td$tipEdges] * td$sts2 )
+	wlap <- omegas^2 * W                 # weight of A'WA per edge (mirrors the active-set solver)
+	g    <- omegas * W * Badj            # rhs A'WB contribution per edge
+	parcol   <- edge[, 1] - n
+	is_tip   <- edge[, 2] <= n
+	childcol <- ifelse(is_tip, NA_integer_, edge[, 2] - n)
+	ni       <- !is_tip
+	i_idx <- c(parcol, parcol[ni], childcol[ni], childcol[ni], seq_len(p))
+	j_idx <- c(parcol, childcol[ni], parcol[ni], childcol[ni], seq_len(p))
+	x_val <- c(wlap,  -wlap[ni],   -wlap[ni],    wlap[ni],     rep(1e-8, p))
+	L <- Matrix::sparseMatrix(i = i_idx, j = j_idx, x = x_val, dims = c(p, p), symmetric = FALSE)
+	cvec <- as.numeric( tapply(-g, parcol, sum)[as.character(seq_len(p))] ); cvec[is.na(cvec)] <- 0
+	if (any(ni)){
+		add <- tapply(g[ni], childcol[ni], sum); idx <- as.integer(names(add))
+		cvec[idx] <- cvec[idx] + as.numeric(add)
+	}
+	ch <- tryCatch(Matrix::Cholesky(Matrix::forceSymmetric(L), perm = TRUE, LDL = FALSE), error = function(e) NULL)
+	if (is.null(ch)) return(NULL)
+	x <- as.numeric( Matrix::solve(ch, cvec, system = "A") )
+	if (any(!is.finite(x))) return(NULL)
+	unname(x)
+}
+
 .optim.Ti0 <- function( omegas, td , scale_var_by_rate = FALSE){
+	# sparse O(n) unconstrained solve; fall back to the dense lm if Matrix is unavailable
+	# or the factor is singular
+	sx <- .optim.Ti0.sparse( omegas, td, scale_var_by_rate )
+	if (!is.null(sx)) return(sx)
 		A <- omegas * td$A0
 		B <- td$B0
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
