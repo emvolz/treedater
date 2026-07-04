@@ -4,7 +4,7 @@
 #' @references
 #' Volz, E. M., and S. D. W. Frost. "Scalable relaxed clock phylogenetic dating." Virus Evolution 3.2 (2017).
 #' @import ape
-#' @import limSolve
+#' @importFrom quadprog solve.QP
 #' @import stats
 #' @import utils
 "_PACKAGE"
