@@ -297,3 +297,26 @@ test_that(".optim.Ti0.sparse (unconstrained path) matches the dense lm solution"
     expect_equal(xs, xl, tolerance = 1e-6, info = sprintf("seed=%d svbr=%s", seed, svbr))
   }
 })
+
+# =============================================================================
+test_that("sparse solver converges on degenerate constraint sets (GI constraint exchange)", {
+  skip_if_not_installed("Matrix")
+  skip_if_not_installed("quadprog")
+  # Non-clock-like data (random tree + random sample times) makes many node-ordering
+  # constraints bind and go linearly dependent -- a degenerate active set. The dual
+  # (Goldfarb-Idnani) solver must converge to the true FEASIBLE optimum here via constraint
+  # exchange, matching quadprog. (A plain primal active-set bails / returns NULL on this.)
+  for (n in c(200L, 400L)) for (seed in 1:2) {
+    set.seed(seed * 13 + n)
+    tr  <- ape::rtree(n)
+    sts <- stats::setNames(runif(n, 2000, 2020), tr$tip.label)
+    td  <- treedater:::.make.tree.data(tr, sts, s = 1000, cc = 10)
+    om  <- rep(1, nrow(td$tre$edge))
+    xg <- treedater:::.optim.Ti5.sparse.activeset(om, td)
+    xq <- treedater:::.optim.Ti5.constrained.quadprog(om, td)
+    label <- sprintf("n=%d seed=%d", n, seed)
+    expect_false(is.null(xg), info = paste("sparse solver bailed on degenerate", label))
+    expect_lte(max(as.numeric(td$Ain %*% xg) - td$bin), 1e-6)          # feasible
+    expect_equal(xg, xq, tolerance = 1e-6, info = label)               # true optimum
+  }
+})
