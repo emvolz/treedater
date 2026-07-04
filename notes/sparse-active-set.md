@@ -4,24 +4,28 @@
 
 `treedater`'s inner node‑time optimisation was `O(n³)` per iteration, which
 dominated run time on large trees. This change adds a **sparse Schur‑complement
-active‑set** solver that is `O(n · #active‑constraints)` per solve — many times
-faster on large trees — while returning numerically identical estimates. It is
-exposed through a new value of the existing `clsSolver` argument,
-`clsSolver = "sparse"`, which is now the **default**. The previous dense solver
-remains available as `clsSolver = "limSolve"`.
+active‑set** solver that is `O(n · #active‑constraints)` per solve — several
+times faster on real relaxed‑clock fits — while returning numerically identical
+estimates. It is exposed through a new value of the existing `clsSolver`
+argument, `clsSolver = "sparse"`, which is now the **default**. A dense reference
+solver is available as `clsSolver = "quadprog"`.
 
-| n (tips) | `limSolve` (dense) | `sparse` (new) | speed‑up | Δ tMRCA |
+**End‑to‑end speed‑up on real data** (UK subtype‑C HIV tree, additive relaxed
+clock, `omega0 = 0.0015`, single start, `ncpu = 1`; `sparse` vs. the dense
+`quadprog` solver, identical estimates):
+
+| n (tips) | `quadprog` (dense) | `sparse` (new) | speed‑up | Δ tMRCA |
 |---------:|-------------------:|---------------:|---------:|--------:|
-|     250  |     0.083 s        |    0.019 s     |     4×   | 2.5e‑12 |
-|     500  |     1.045 s        |    0.022 s     |    47×   | 1.4e‑12 |
-|   1 000  |    14.3   s        |    0.067 s     |   214×   | 3.4e‑12 |
-|   2 000  |    45.2   s        |    0.183 s     |   247×   | 3.6e‑12 |
-|   4 000  |   (≈ 10 min)       |    0.516 s     |    —     |    —    |
-|   8 000  |   (impractical)    |    1.395 s     |    —     |    —    |
+|   1 000  |      11.3 s        |     1.9 s      |    6×    | 1.2e‑8  |
+|   2 000  |      84.9 s        |     5.8 s      |   15×    | 2.2e‑7  |
 
-(strict clock, single start condition; random binary trees with exponential
-branch lengths and clock‑like tip dates. Δ tMRCA is the difference between the
-sparse and dense estimates — i.e. they agree to `~1e‑12`.)
+The single‑solve speed‑up grows with `n` and, on *idealised* perfectly
+clock‑like trees, reaches 100×+ — but that best case has **zero** binding
+ordering constraints. Real rate variation makes `O(n)` constraints bind, so the
+realistic end‑to‑end gain is the ~6–15× above. Beyond ~3 500 tips a single solve
+on real data can hit a degenerate (rank‑deficient) active set; the solver then
+falls back to the dense `quadprog` path (detecting the degeneracy in seconds
+rather than churning). See "Scaling and limits" below.
 
 ## The bottleneck
 
@@ -36,11 +40,10 @@ subject to  Ain · x ≤ bin           (t_parent ≤ t_child ,  t_parent ≤ t_t
 ```
 
 This quadratic program is re‑solved on **every** coordinate‑descent iteration of
-the clock fit. The original solver, `.optim.Ti5.constrained.limsolve`, handed it
-to `limSolve::lsei`, which forms the dense `p × p` normal matrix `AᵀWA` and runs
-a dense active‑set QP — both steps are `O(n³)` (with an `O(n²)` memory
-footprint). For `n` in the hundreds this already dominates; beyond ~2 000 tips it
-is impractical.
+the clock fit. The dense solver forms the `p × p` normal matrix `AᵀWA` and runs a
+dense active‑set QP — both steps are `O(n³)` (with an `O(n²)` memory footprint).
+For `n` in the hundreds this already dominates; beyond ~2 000 tips it is
+impractical.
 
 ## The key structure
 
@@ -62,7 +65,7 @@ Two observations make the problem sparse:
 
 We solve the constrained QP with a primal **active‑set** method whose linear
 algebra is driven by a **single sparse factorisation** of the tree Laplacian
-`L = AᵀWA`:
+`L = AᵀWA`, with the working‑set linear algebra maintained **incrementally**:
 
 1. **Factor once.** Build `L` as a sparse matrix and factor it with a sparse
    Cholesky (`Matrix::Cholesky`, i.e. CHOLMOD). On a tree, the elimination tree
@@ -71,75 +74,123 @@ algebra is driven by a **single sparse factorisation** of the tree Laplacian
    tree from tips to root.)
 2. **Unconstrained solve.** `x0 = L⁻¹ c`, where `c = AᵀWB` is the right‑hand
    side (`O(n)`).
-3. **Active‑set iterations.** Maintaining a working set of binding constraints
-   `E x = f`:
-   - apply `L⁻¹` to the active constraint columns, `Z = L⁻¹ Eᵀ` (each column
-     `O(n)`; batched into one sparse solve);
-   - form and solve the small dense Schur system `S μ = E x0 − f` with
-     `S = E Z` (`|active| × |active|`) for the multipliers `μ`;
+3. **Active‑set iterations.** Maintain a working set of binding constraints
+   `E x = f`, the matrix `Z = L⁻¹ Eᵀ`, and a Cholesky factor of the Schur matrix
+   `S = E Z` — all updated **one column at a time**:
+   - when a constraint enters, solve for its single new column of `Z` with one
+     `O(n)` sparse solve and extend the Schur factor by a **bordered rank‑1
+     update**; on the (rare) release, drop the column and refactor;
+   - solve the small dense Schur system `S μ = E x0 − f` for the multipliers `μ`
+     using the maintained factor;
    - update `x = x0 − Z μ`;
    - **add** the most‑violated inactive constraint, or **release** the
      constraint with the most‑negative multiplier, and repeat.
 4. **Terminate** when no constraint is violated and all multipliers are
    non‑negative (KKT satisfied).
 
-The total cost is `O(n · #active)` — the tree factor is reused across all
-active‑set iterations rather than refactoring a dense matrix each time. In
-practice only a handful of temporal constraints bind, so the solver is close to
-linear in `n`.
+Because each add/drop touches one column, a step costs one sparse solve plus
+`O(#active²)` dense work, rather than re‑solving all `#active` columns and an
+`O(#active³)` dense system from scratch every step. The tree factor is reused
+across all active‑set iterations. For tree node‑ordering constraints the active
+set is, in practice, **monotonic** — constraints enter and stay — so the release
+path is essentially never exercised.
+
+## Scaling and limits
+
+The `O(n · #active)` framing is only near‑linear in `n` when few constraints bind.
+That holds on clock‑like data. On **real, rate‑varying data it does not**: measured
+on subtype‑C subsamples, a roughly *constant* ~30% of node‑ordering constraints
+bind at every size (`#active ≈ 0.3 n`, from `n` = 1 000 to 5 000). With the Schur
+work then `O(#active² … #active³)`, the solver is effectively `O(n³)`‑order on real
+data (empirically the per‑solve time scales ~`n^2.3`). So on real data this is a
+**large constant‑factor win — the ~6–15× in the table above — not an asymptotic
+`O(n³)→O(n)` improvement.** Two consequences worth knowing:
+
+- **Crossover.** On small trees the sparse solver's per‑solve overhead can make
+  it no faster (or slightly slower) than the dense solver, but the node‑time
+  solve is not a repeated hot path there, so it does not matter. The win shows up
+  from ~500–1 000 tips upward.
+- **Degeneracy → fallback.** When many constraints bind they can become linearly
+  dependent; the bordered Cholesky detects this the moment such a constraint would
+  enter (`ρ² ≤ 0`), the solver returns `NULL`, and the caller falls back to the
+  dense `quadprog` solve. On the real subtype‑C tree this starts to appear around
+  ~4 000 tips, but it is **sporadic and instance‑dependent**, not a hard threshold:
+  a 4 500‑tip subsample converges (in ~33 s) while the 4 000‑ and 5 000‑tip
+  subsamples fall back. Two distinct costs: the incremental factor makes the
+  *failed sparse attempt* cheap (it bails in seconds rather than churning for
+  minutes), but the dense `quadprog` solve it then falls back to is still a full
+  `O(n³)` solve and dominates that node‑time step. Failing fast saves the wasted
+  attempt; it does not make the fallback solve cheap.
+
+  Falling back is deliberate. A degenerate active set is a genuine LICQ failure
+  that a robust *dual* QP method (`quadprog`'s Goldfarb‑Idnani) handles correctly.
+  Simply regularising the Schur to push through the degeneracy was tried and
+  **produces infeasible node times** (parent younger than child, error growing
+  with `n`) — so the sparse solver hands these instances to `quadprog` rather than
+  return a wrong answer. Making the sparse path itself robust to degeneracy would
+  require a proper sparse dual pivot (a larger project).
 
 ## The API option
 
-`clsSolver` already selected the constrained‑least‑squares backend
-(`"limSolve"` or `"mgcv"`); the new solver is a third choice and the default:
+`clsSolver` selects the constrained‑least‑squares backend; the new solver is the
+default:
 
 ```r
-clsSolver = c("sparse", "limSolve", "mgcv")     # "sparse" is the default
+clsSolver = c("sparse", "quadprog", "mgcv")     # "sparse" is the default
 ```
 
 - `"sparse"` — the new tree‑Laplacian active‑set (requires the **Matrix**
   package, which is a "recommended" package shipped with R).
-- `"limSolve"` — the previous dense `lsei` solver, unchanged (use this to
-  reproduce pre‑change results exactly, or as a reference).
+- `"quadprog"` — the dense reference solver (forms `AᵀWA` and calls
+  `quadprog::solve.QP`, a robust Goldfarb‑Idnani dual active‑set). Use this to
+  cross‑check the sparse result or as the guaranteed fallback.
 - `"mgcv"` — the `mgcv::pcls` path, unchanged.
 
 The `"sparse"` path is defensive: if the **Matrix** package is unavailable, the
 Cholesky factor is singular, or the active set fails to converge, it silently
-falls back to `"limSolve"` (and then to `"mgcv"`), so results are always
+falls back to `"quadprog"` (and then to `"mgcv"`), so results are always
 produced.
 
 Examples:
 
 ```r
 dtr <- dater(tre, sts, s = 1500)                          # sparse (default), fast
-dtr <- dater(tre, sts, s = 1500, clsSolver = "limSolve")  # dense reference
+dtr <- dater(tre, sts, s = 1500, clsSolver = "quadprog")  # dense reference
 ```
 
 ## Correctness / validation
 
-- **Sparse vs. dense parity.** Across the phylodate test corpus and the bundled
-  H3N2 example, `clsSolver = "sparse"` reproduces `clsSolver = "limSolve"`:
-  - strict clock (deterministic): tMRCA and rate agree to `~1e‑12`
-    (essentially bit‑for‑bit);
+- **Sparse vs. dense parity.** On the bundled H3N2 example and the subtype‑C
+  tree, `clsSolver = "sparse"` reproduces `clsSolver = "quadprog"`:
+  - strict clock (deterministic): tMRCA and rate agree to `~1e‑12`;
   - relaxed clocks (`uncorrelated`/`additive`, which wrap the solver in a
     Nelder‑Mead search): agree to `~1e‑5`, far tighter than any reporting
     precision — the tiny difference is the Nelder‑Mead trajectory amplifying a
-    `~1e‑13` difference in the inner solve.
-- **H3N2 example (177 tips).** Default and `"limSolve"` give identical
-  `tMRCA = 1980.472`, `rate = 3.194e‑3`; downstream `outlierTips` and `parboot`
-  run unchanged through the sparse path.
-- **`R CMD check`** passes (examples OK, dependencies OK, Rd OK); the only NOTEs
-  are pre‑existing/environmental (checking a git working tree; the existing
-  vignette).
+    `~1e‑11` difference in the inner solve.
+  Direct solver‑level parity (identical `td`/`omega`) is `~1e‑9` even with
+  hundreds of active constraints.
+- **H3N2 example (177 tips).** Default and `"quadprog"` give identical tMRCA and
+  rate; downstream `outlierTips` and `parboot` run unchanged through the sparse
+  path.
+- **Test suite.** `tests/testthat/` covers sparse↔quadprog parity (clock‑like,
+  heterogeneous rates, noisy/many‑constraint), constraint feasibility, the
+  `sparse → quadprog` fallback, `clsSolver` forwarding, all three clock models
+  (strict / uncorrelated / additive), `temporalConstraints = FALSE`, and
+  `estimateSampleTimes`.
 
 ## Files changed
 
 - `R/treedater0.R`
-  - new `.optim.Ti5.sparse.activeset()` (the sparse Schur‑complement active‑set);
-  - fit loop dispatches on `clsSolver == "sparse"` with graceful fallback;
-  - `"sparse"` added as the default `clsSolver` choice in both `dater()` and the
-    internal `.dater()`, and `clsSolver` is now forwarded from `dater()` to
-    `.dater()` (it previously was not);
+  - new `.optim.Ti5.sparse.activeset()` (the incremental sparse active‑set);
+  - new `.optim.Ti5.constrained.quadprog()` (dense reference / fallback via
+    `quadprog::solve.QP`), replacing the former `limSolve::lsei` solver;
+  - fit loop dispatches on `clsSolver == "sparse"` with graceful fallback to
+    `"quadprog"` then `"mgcv"`;
+  - `"sparse"` is the default `clsSolver` in both `dater()` and the internal
+    `.dater()`, and `clsSolver` is now forwarded from `dater()` to `.dater()`
+    (it previously was not);
   - updated `@param clsSolver` documentation.
-- `DESCRIPTION` — `Imports: Matrix`.
-- `man/dater.Rd` — regenerated for the new `clsSolver` documentation.
+- `DESCRIPTION` — dropped `limSolve` from `Depends` (it is being discontinued on
+  CRAN); added `quadprog` and `Matrix` to `Imports`.
+- `NAMESPACE` / `man/dater.Rd` — regenerated.
+- `tests/testthat/` — new test suite (see above).
