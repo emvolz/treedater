@@ -248,19 +248,37 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 # which the sparse solver can fail).  Selected by clsSolver="quadprog" and used as the
 # automatic fallback when the sparse solver returns NULL.
 .optim.Ti5.constrained.quadprog <- function(omegas, td){
-		A <- omegas * td$A0
-		B <- td$B0
-		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
-
-	w  <- sqrt( td$W0 )
-	Aw <- A * w
-	Bw <- B * w
-	Dmat <- crossprod( Aw )                     # A'WA  (p x p, symmetric PD tree Laplacian)
-	diag(Dmat) <- diag(Dmat) + 1e-8             # ridge for numerical positive-definiteness
-	dvec <- as.vector( crossprod( Aw, Bw ) )    # A'WB
-	# solve.QP minimises -dvec'x + (1/2) x'Dmat x  s.t.  t(Amat) x >= bvec ;
+	Badj <- td$B0
+	Badj[td$tipEdges] <- td$B0[td$tipEdges] - unname( omegas[td$tipEdges] * td$sts2 )
+	if (requireNamespace('Matrix', quietly = TRUE)){
+		# A'WA is a sparse tree Laplacian (<=2 non-zeros per row), so build it in O(n) and
+		# densify for quadprog rather than forming it with the O(n^3) dense crossprod(A'A).
+		n <- td$n; p <- n - 1L; edge <- td$tre$edge; W <- td$W0
+		wlap <- omegas^2 * W                 # A'WA weight per edge
+		g    <- omegas * W * Badj            # A'WB contribution per edge
+		parcol   <- edge[, 1] - n
+		is_tip   <- edge[, 2] <= n
+		childcol <- ifelse(is_tip, NA_integer_, edge[, 2] - n)
+		ni       <- !is_tip
+		i_idx <- c(parcol, parcol[ni], childcol[ni], childcol[ni], seq_len(p))
+		j_idx <- c(parcol, childcol[ni], parcol[ni], childcol[ni], seq_len(p))
+		x_val <- c(wlap,  -wlap[ni],   -wlap[ni],    wlap[ni],     rep(1e-8, p))  # +1e-8 ridge
+		Dmat <- as.matrix( Matrix::forceSymmetric(
+		          Matrix::sparseMatrix(i = i_idx, j = j_idx, x = x_val, dims = c(p, p), symmetric = FALSE) ) )
+		cvec <- as.numeric( tapply(-g, parcol, sum)[as.character(seq_len(p))] ); cvec[is.na(cvec)] <- 0
+		if (any(ni)){
+			add <- tapply(g[ni], childcol[ni], sum); idx <- as.integer(names(add))
+			cvec[idx] <- cvec[idx] + as.numeric(add)
+		}
+	} else {
+		# dense fallback if Matrix is unavailable: form the normal equations directly
+		w  <- sqrt( td$W0 ); Aw <- (omegas * td$A0) * w
+		Dmat <- crossprod( Aw ); diag(Dmat) <- diag(Dmat) + 1e-8
+		cvec <- as.vector( crossprod( Aw, Badj * w ) )
+	}
+	# solve.QP minimises -cvec'x + (1/2) x'Dmat x  s.t.  t(Amat) x >= bvec ;
 	# our constraint is  Ain x <= bin  <=>  -Ain x >= -bin
-	unname( quadprog::solve.QP( Dmat, dvec, Amat = -t(td$Ain), bvec = -td$bin )$solution )
+	unname( quadprog::solve.QP( Dmat, cvec, Amat = -t(td$Ain), bvec = -td$bin )$solution )
 }
 
 # Sparse Schur-complement ACTIVE-SET for the ti5 node-time QP (clsSolver="sparse", the
