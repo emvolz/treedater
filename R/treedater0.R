@@ -205,21 +205,25 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 
 
 
-# constraints using quad prog.  DENSE O(n^3) reference solver: forms A'A and solves the
-# QP with limSolve::lsei every coordinate-descent iteration.  Selected by clsSolver="limSolve".
-.optim.Ti5.constrained.limsolve <- function(omegas, td){
+# constraints using quadratic programming.  DENSE O(n^3) reference / fallback solver: forms
+# the normal matrix A'WA and solves the constrained QP with quadprog::solve.QP (a robust
+# Goldfarb-Idnani dual active-set that tolerates the redundant/degenerate constraint sets on
+# which the sparse solver can fail).  Selected by clsSolver="quadprog" and used as the
+# automatic fallback when the sparse solver returns NULL.
+.optim.Ti5.constrained.quadprog <- function(omegas, td){
 		A <- omegas * td$A0
 		B <- td$B0
 		B[td$tipEdges] <- td$B0[td$tipEdges] -  unname( omegas[td$tipEdges] * td$sts2 )
-		# initial feasible parameter values:
 
-	w <- sqrt(td$W)
-	unname( lsei( A = A * w
-	 , B = B * w
-	 , G = -td$Ain
-	 , H = -td$bin
-	 , type = 2
-	)$X )
+	w  <- sqrt( td$W0 )
+	Aw <- A * w
+	Bw <- B * w
+	Dmat <- crossprod( Aw )                     # A'WA  (p x p, symmetric PD tree Laplacian)
+	diag(Dmat) <- diag(Dmat) + 1e-8             # ridge for numerical positive-definiteness
+	dvec <- as.vector( crossprod( Aw, Bw ) )    # A'WB
+	# solve.QP minimises -dvec'x + (1/2) x'Dmat x  s.t.  t(Amat) x >= bvec ;
+	# our constraint is  Ain x <= bin  <=>  -Ain x >= -bin
+	unname( quadprog::solve.QP( Dmat, dvec, Amat = -t(td$Ain), bvec = -td$bin )$solution )
 }
 
 # Sparse Schur-complement ACTIVE-SET for the ti5 node-time QP (clsSolver="sparse", the
@@ -228,15 +232,17 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 # The weighted normal-equations matrix A'WA is a weighted TREE LAPLACIAN (each edge
 # contributes <=2 non-zeros per row), and the node-ordering constraints Ain x <= bin
 # (parent time <= child/tip time) are single edge rows. So instead of the dense O(n^3)
-# `lsei` (which forms A'A and solves a dense QP every coordinate-descent iteration) we:
+# QP (which forms A'A and solves a dense QP every coordinate-descent iteration) we:
 #   * factor the sparse tree Laplacian L = A'WA ONCE with a sparse Cholesky (CHOLMOD via
 #     the Matrix package finds the tree's perfect elimination ordering -> O(n), no fill),
-#   * apply L^-1 to the rhs and to the active-constraint columns (each O(n)),
-#   * solve a small dense |active| x |active| Schur system for the multipliers,
+#   * apply L^-1 to the rhs, and maintain Z = L^-1 E' one column at a time as constraints
+#     enter the active set (each new column is one O(n) sparse solve),
+#   * maintain a Cholesky factor of the small dense |active| x |active| Schur system by a
+#     bordered rank-1 update (refactored only on the rare constraint release),
 #   * add the most-violated constraint / release a negative multiplier each step
 #     (a standard primal active-set).
 # Cost is O(n * #active) instead of O(n^3). Returns NULL (caller falls back to the dense
-# `lsei`) if Matrix is unavailable, the factor is singular, or it fails to converge.
+# quadprog solver) if Matrix is unavailable, the factor is singular, or it fails to converge.
 .optim.Ti5.sparse.activeset <- function(omegas, td){
 	if (!requireNamespace('Matrix', quietly = TRUE)) return(NULL)
 	tre <- td$tre; n <- td$n; p <- n - 1L
@@ -275,42 +281,58 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	binv <- numeric(ne); binv[td$tipEdges] <- td$sts2   # constraint bounds
 	row_val <- function(k, v) if (is.na(childcol[k])) v[parcol[k]] else v[parcol[k]] - v[childcol[k]]
 
+	# helper: unit constraint vector e_k  (+1 at parent, -1 at internal child)
+	evec <- function(k){ e <- numeric(p); e[parcol[k]] <- 1; if (!is.na(childcol[k])) e[childcol[k]] <- -1; e }
+
 	x0 <- as.numeric(solveL(cvec))
 	active <- integer(0); tol <- 1e-9
+	# INCREMENTAL active-set: maintain Z = L^-1 E' one column at a time and a Cholesky
+	# factor R of the Schur matrix S = E Z (bordered rank-1 update on add, refactor on the
+	# rare release), so each step costs ONE sparse solve + O(#active^2) instead of
+	# re-solving all #active columns and an O(#active^3) dense system from scratch every step.
+	Z <- matrix(0, p, 0)      # columns L^-1 e_k, one per active constraint
+	R <- matrix(0, 0, 0)      # upper Cholesky of S:  crossprod(R) == S
 	for (it in seq_len(ne + 5L)){
-		if (length(active) == 0L){
+		m <- length(active)
+		if (m == 0L){
 			x <- x0; mult <- numeric(0)
 		} else {
-			m <- length(active)
-			# batch-solve Z = L^-1 E' for the active constraint columns E'
-			ii <- integer(0); jj <- integer(0); xx <- numeric(0)
-			for (a in seq_len(m)){
-				k <- active[a]
-				ii <- c(ii, parcol[k]); jj <- c(jj, a); xx <- c(xx, 1)
-				if (!is.na(childcol[k])){ ii <- c(ii, childcol[k]); jj <- c(jj, a); xx <- c(xx, -1) }
-			}
-			Et <- Matrix::sparseMatrix(i = ii, j = jj, x = xx, dims = c(p, m))
-			Z  <- as.matrix(solveL(Et))                # p x m
-			# Schur S = E Z ; rs = E x0 - bin
-			S <- matrix(0, m, m); rs <- numeric(m)
-			for (a in seq_len(m)){
-				k <- active[a]
-				S[a, ] <- if (is.na(childcol[k])) Z[parcol[k], ] else Z[parcol[k], ] - Z[childcol[k], ]
-				rs[a]  <- row_val(k, x0) - binv[k]
-			}
-			mu <- tryCatch(solve(S, rs), error = function(e) NULL)
-			if (is.null(mu) || any(!is.finite(mu))) return(NULL)
-			x <- x0 - as.numeric(Z %*% mu); mult <- mu
+			rs <- vapply(active, function(k) row_val(k, x0) - binv[k], numeric(1))
+			mu <- backsolve(R, backsolve(R, rs, transpose = TRUE))   # S mu = rs  via S = R'R
+			x  <- x0 - as.numeric(Z %*% mu); mult <- mu
 		}
 		# most-violated inactive constraint  (Ain x - bin > 0)
 		lhs <- x[parcol]; lhs[ni] <- lhs[ni] - x[childcol[ni]]
 		viol <- lhs - binv; viol[active] <- -Inf
 		kb <- which.max(viol)
-		if (length(kb) && viol[kb] > tol){ active <- c(active, kb); next }
+		if (length(kb) && viol[kb] > tol){
+			# ADD constraint kb: one sparse solve for its column + bordered Cholesky update
+			z <- as.numeric(solveL(evec(kb))); d <- row_val(kb, z)
+			if (m == 0L){
+				if (d <= 0) return(NULL)
+				R <- matrix(sqrt(d), 1, 1)
+			} else {
+				s <- vapply(active, function(k) row_val(k, z), numeric(1))
+				r <- backsolve(R, s, transpose = TRUE); rho2 <- d - sum(r * r)
+				if (rho2 <= 0) return(NULL)          # constraint (nearly) dependent -> fall back
+				R <- rbind(cbind(R, r), c(rep(0, m), sqrt(rho2)))
+			}
+			Z <- cbind(Z, z); active <- c(active, kb); next
+		}
 		# release the most-negative multiplier
-		if (length(active) > 0L){
+		if (m > 0L){
 			mn <- which.min(mult)
-			if (mult[mn] < -tol){ active <- active[-mn]; next }
+			if (mult[mn] < -tol){
+				active <- active[-mn]; Z <- Z[, -mn, drop = FALSE]
+				if (length(active) == 0L){ R <- matrix(0, 0, 0) }
+				else {
+					S <- matrix(0, length(active), length(active))
+					for (a in seq_along(active)) S[a, ] <- vapply(active, function(k) row_val(k, Z[, a]), numeric(1))
+					R <- tryCatch(chol(S), error = function(e) NULL)
+					if (is.null(R)) return(NULL)
+				}
+				next
+			}
 		}
 		ztol <- sqrt(.Machine$double.eps); x[abs(x) < ztol] <- 0
 		return(x)
@@ -468,7 +490,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
  , numStartConditions = 1
- , clsSolver=c('sparse', 'limSolve', 'mgcv')
+ , clsSolver=c('sparse', 'quadprog', 'mgcv')
  , meanRateLimits = NULL
  , ncpu = 1
  , parallel_foreach = FALSE
@@ -476,7 +498,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
  , tiplabel_est_samp_times = NULL
 )
 {
-	clsSolver <- match.arg( clsSolver, choices = c('sparse', 'limSolve', 'mgcv'))
+	clsSolver <- match.arg( clsSolver, choices = c('sparse', 'quadprog', 'mgcv'))
 	clock <- match.arg( clock , choices = c('uncorrelated', 'additive', 'strict') )
 	# defaults
 	CV_LB <- 1e-6 # lsd tests indicate Gamma-Poisson model may be more accurate even in strict clock situation
@@ -545,14 +567,14 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 			if (temporalConstraints){
 				if (clsSolver=='sparse'){
 					# sparse Schur-complement active-set (O(n*#active)); fall back to the
-					# dense lsei, then mgcv, if it is unavailable / fails to converge.
+					# dense quadprog solver, then mgcv, if it is unavailable / fails to converge.
 					Ti <- tryCatch( .optim.Ti5.sparse.activeset( omegas, td )
 					 , error = function(e) NULL )
 					if (is.null(Ti))
-						Ti <- tryCatch( .optim.Ti5.constrained.limsolve( omegas, td )
+						Ti <- tryCatch( .optim.Ti5.constrained.quadprog( omegas, td )
 						 , error = function(e) .optim.Ti2( omegas, td ) )
-				} else if (clsSolver=='limSolve'){
-					Ti <- tryCatch( .optim.Ti5.constrained.limsolve ( omegas, td )
+				} else if (clsSolver=='quadprog'){
+					Ti <- tryCatch( .optim.Ti5.constrained.quadprog ( omegas, td )
 					 , error = function(e) .optim.Ti2( omegas, td)  )
 				} else{
 					Ti <- .optim.Ti2( omegas, td)
@@ -788,7 +810,7 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 #'           should correspond to elements in tip.label with uncertain
 #'           sample times.
 #' @param numStartConditions Will attempt optimisation from more than one starting point if >0
-#' @param clsSolver Which solver should be used for the temporally-constrained least-squares node-time optimisation? Options are "sparse" (default), "limSolve", or "mgcv". "sparse" uses a sparse tree-Laplacian active-set (O(n) per solve; requires the \pkg{Matrix} package) and is many times faster on large trees while giving numerically identical results to "limSolve" (the previous default dense quadratic-programming solver). It automatically falls back to "limSolve" if \pkg{Matrix} is unavailable or the sparse solve fails.
+#' @param clsSolver Which solver should be used for the temporally-constrained least-squares node-time optimisation? Options are "sparse" (default), "quadprog", or "mgcv". "sparse" uses a sparse tree-Laplacian active-set (O(n) per solve; requires the \pkg{Matrix} package) and is many times faster on large trees while giving numerically identical results to the dense "quadprog" solver (which forms the normal matrix and solves the constrained quadratic program with \pkg{quadprog}). "sparse" automatically falls back to "quadprog" if \pkg{Matrix} is unavailable or the sparse solve fails, so results are always produced.
 #' @param meanRateLimits Optional constraints for the mean substitution rate
 #' @param ncpu Number of threads for parallel computing
 #' @param parallel_foreach If TRUE, will use the "foreach" package instead of the "parallel" package. This may work better on some HPC systems.
@@ -826,13 +848,13 @@ dater <- function(tre, sts, s=1e3
  , estimateSampleTimes = NULL
  , estimateSampleTimes_densities= list()
  , numStartConditions = 1
- , clsSolver=c('sparse', 'limSolve', 'mgcv')
+ , clsSolver=c('sparse', 'quadprog', 'mgcv')
  , meanRateLimits = NULL
  , ncpu = 1
  , parallel_foreach = FALSE
 )
 {
-	clsSolver <- match.arg( clsSolver, choices = c('sparse', 'limSolve', 'mgcv'))
+	clsSolver <- match.arg( clsSolver, choices = c('sparse', 'quadprog', 'mgcv'))
 	clock <- match.arg( clock , choices = c('strict' , 'uncorrelated', 'additive') )
 	# defaults
 	if ( is.na( omega0 ) ){

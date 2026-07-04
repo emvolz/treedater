@@ -19,7 +19,7 @@ dater(
   estimateSampleTimes = NULL,
   estimateSampleTimes_densities = list(),
   numStartConditions = 1,
-  clsSolver = c("sparse", "limSolve", "mgcv"),
+  clsSolver = c("sparse", "quadprog", "mgcv"),
   meanRateLimits = NULL,
   ncpu = 1,
   parallel_foreach = FALSE
@@ -82,7 +82,7 @@ sample times.}
 
 \item{numStartConditions}{Will attempt optimisation from more than one starting point if >0}
 
-\item{clsSolver}{Which solver should be used for the temporally-constrained least-squares node-time optimisation? Options are "sparse" (default), "limSolve", or "mgcv". "sparse" uses a sparse tree-Laplacian active-set (O(n) per solve; requires the \pkg{Matrix} package) and is many times faster on large trees while giving numerically identical results to "limSolve" (the previous default dense quadratic-programming solver). It automatically falls back to "limSolve" if \pkg{Matrix} is unavailable or the sparse solve fails.}
+\item{clsSolver}{Which solver should be used for the temporally-constrained least-squares node-time optimisation? Options are "sparse" (default), "quadprog", or "mgcv". "sparse" uses a sparse tree-Laplacian active-set (O(n) per solve; requires the \pkg{Matrix} package) and is many times faster on large trees while giving numerically identical results to the dense "quadprog" solver (which forms the normal matrix and solves the constrained quadratic program with \pkg{quadprog}). "sparse" automatically falls back to "quadprog" if \pkg{Matrix} is unavailable or the sparse solve fails, so results are always produced.}
 
 \item{meanRateLimits}{Optional constraints for the mean substitution rate}
 
