@@ -3,29 +3,45 @@
 ## Summary
 
 `treedater`'s inner node‑time optimisation was `O(n³)` per iteration, which
-dominated run time on large trees. This change adds a **sparse Schur‑complement
-active‑set** solver that is `O(n · #active‑constraints)` per solve — several
+dominated run time on large trees. This change adds a **sparse Goldfarb–Idnani
+dual active‑set** solver that is `O(n · #active‑constraints)` per solve — several
 times faster on real relaxed‑clock fits — while returning numerically identical
 estimates. It is exposed through a new value of the existing `clsSolver`
 argument, `clsSolver = "sparse"`, which is now the **default**. A dense reference
 solver is available as `clsSolver = "quadprog"`.
 
-**End‑to‑end speed‑up on real data** (UK subtype‑C HIV tree, additive relaxed
-clock, `omega0 = 0.0015`, single start, `ncpu = 1`; `sparse` vs. the dense
-`quadprog` solver, identical estimates):
+**Realistic end‑to‑end wall‑clock on real data.** All figures are full `dater()`
+fits at `ncpu = 1`, sparse (GI) vs. the dense solver, with numerically identical
+estimates. Note `ncpu` parallelises only the root search / start conditions /
+`parboot`, *not* the node‑time solver, so the *speed‑up ratio* is
+`ncpu`‑independent (with `ncpu > 1` both absolute times drop for unrooted trees).
 
-| n (tips) | `quadprog` (dense) | `sparse` (new) | speed‑up | Δ tMRCA |
-|---------:|-------------------:|---------------:|---------:|--------:|
-|   1 000  |      11.3 s        |     1.9 s      |    6×    | 1.2e‑8  |
-|   2 000  |      84.9 s        |     5.8 s      |   15×    | 2.2e‑7  |
+UK subtype‑C HIV (rate‑heterogeneous, additive clock):
 
-The single‑solve speed‑up grows with `n` and, on *idealised* perfectly
-clock‑like trees, reaches 100×+ — but that best case has **zero** binding
-ordering constraints. Real rate variation makes `O(n)` constraints bind, so the
-realistic end‑to‑end gain is the ~6–15× above. Beyond ~3 500 tips a single solve
-on real data can hit a degenerate (rank‑deficient) active set; the solver then
-falls back to the dense `quadprog` path (detecting the degeneracy in seconds
-rather than churning). See "Scaling and limits" below.
+| n (tips)       | dense             | sparse (GI) | speed‑up |
+|---------------:|------------------:|------------:|---------:|
+|   1 000        |   11 s            |    1.9 s    |    6×    |
+|   2 000        |   85 s            |    5.8 s    |   15×    |
+|  11 695 (full) |  ~10 h (limSolve, historical) | 22 min | ~28× |
+
+EBOV Makona (very clock‑like — one ~1‑year outbreak → the *least*‑favourable case,
+BioNJ tree so with a 5‑way root search):
+
+| n (tips)         | dense (limSolve) | sparse (GI) | speed‑up |
+|-----------------:|-----------------:|------------:|---------:|
+| 1 030 strict     |   584 s          |   184 s     |   3.2×   |
+| 1 030 additive   |   286 s          |    57 s     |   5.0×   |
+| 1 609 additive   |  (~20 min, est.) |   2.7 min   |   ~7×    |
+
+Two rules of thumb: the gain **grows with tree size** (the dense `O(n³)` cost bites
+harder) and **with rate heterogeneity** (more binding ordering constraints → the
+dense QP churns while the sparse solver stays cheap). So expect ~3× on small,
+clock‑like data and ~15–30× on large or rate‑varying trees. It is a **constant
+factor, not an asymptotic win** — on real data ~30% of ordering constraints bind,
+so the solver stays `O(n³)`‑order (see "Scaling and limits"). The idealised "100×+"
+only appears on perfectly clock‑like trees where *no* constraints bind. On the
+degenerate large‑tree solves the dual pivot **converges directly** (it does not
+fall back to the dense solver — see "Scaling and limits").
 
 ## The bottleneck
 
