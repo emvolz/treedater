@@ -1,4 +1,4 @@
-# treedater (development version)
+# treedater 2.0.0
 
 ## New features
 
