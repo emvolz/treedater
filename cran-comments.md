@@ -24,14 +24,18 @@ This is a major release (version 2.0.0) of an existing CRAN package
 ## Test environments
 
 * Local: Ubuntu 24.04, R 4.5.0 (x86_64-pc-linux-gnu)
-* win-builder (R-release and R-devel) -- to be run before submission
-* macOS builder -- to be run before submission
+* win-builder, R-devel (2026-07-04 r90207 ucrt): **Status: OK**
+* win-builder, R-release (R 4.6.1): **Status: OK**
+* macOS builder: the service was unavailable at submission time (retry pending)
 
 ## R CMD check results
 
-`R CMD check --as-cran` reports **0 errors and 0 warnings**, and no notes other
-than the two below, which are artefacts of optional external tools missing on
-the local build machine and do not occur on CRAN's check systems:
+Both win-builder checks (R-devel and R-release) return **Status: OK** --
+0 errors, 0 warnings, 0 notes.
+
+The local `R CMD check --as-cran` is likewise clean apart from two artefacts of
+optional external tools missing on the local machine, which do not occur on
+CRAN / win-builder:
 
 * WARNING: `'qpdf' is needed for checks on size reduction of PDFs` -- `qpdf`
   is not installed on the local machine.
