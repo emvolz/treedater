@@ -3,29 +3,45 @@
 ## Summary
 
 `treedater`'s inner node‑time optimisation was `O(n³)` per iteration, which
-dominated run time on large trees. This change adds a **sparse Schur‑complement
-active‑set** solver that is `O(n · #active‑constraints)` per solve — several
+dominated run time on large trees. This change adds a **sparse Goldfarb–Idnani
+dual active‑set** solver that is `O(n · #active‑constraints)` per solve — several
 times faster on real relaxed‑clock fits — while returning numerically identical
 estimates. It is exposed through a new value of the existing `clsSolver`
 argument, `clsSolver = "sparse"`, which is now the **default**. A dense reference
 solver is available as `clsSolver = "quadprog"`.
 
-**End‑to‑end speed‑up on real data** (UK subtype‑C HIV tree, additive relaxed
-clock, `omega0 = 0.0015`, single start, `ncpu = 1`; `sparse` vs. the dense
-`quadprog` solver, identical estimates):
+**Realistic end‑to‑end wall‑clock on real data.** All figures are full `dater()`
+fits at `ncpu = 1`, sparse (GI) vs. the dense solver, with numerically identical
+estimates. Note `ncpu` parallelises only the root search / start conditions /
+`parboot`, *not* the node‑time solver, so the *speed‑up ratio* is
+`ncpu`‑independent (with `ncpu > 1` both absolute times drop for unrooted trees).
 
-| n (tips) | `quadprog` (dense) | `sparse` (new) | speed‑up | Δ tMRCA |
-|---------:|-------------------:|---------------:|---------:|--------:|
-|   1 000  |      11.3 s        |     1.9 s      |    6×    | 1.2e‑8  |
-|   2 000  |      84.9 s        |     5.8 s      |   15×    | 2.2e‑7  |
+UK subtype‑C HIV (rate‑heterogeneous, additive clock):
 
-The single‑solve speed‑up grows with `n` and, on *idealised* perfectly
-clock‑like trees, reaches 100×+ — but that best case has **zero** binding
-ordering constraints. Real rate variation makes `O(n)` constraints bind, so the
-realistic end‑to‑end gain is the ~6–15× above. Beyond ~3 500 tips a single solve
-on real data can hit a degenerate (rank‑deficient) active set; the solver then
-falls back to the dense `quadprog` path (detecting the degeneracy in seconds
-rather than churning). See "Scaling and limits" below.
+| n (tips)       | dense             | sparse (GI) | speed‑up |
+|---------------:|------------------:|------------:|---------:|
+|   1 000        |   11 s            |    1.9 s    |    6×    |
+|   2 000        |   85 s            |    5.8 s    |   15×    |
+|  11 695 (full) |  ~10 h (limSolve, historical) | 22 min | ~28× |
+
+EBOV Makona (very clock‑like — one ~1‑year outbreak → the *least*‑favourable case,
+BioNJ tree so with a 5‑way root search):
+
+| n (tips)         | dense (limSolve) | sparse (GI) | speed‑up |
+|-----------------:|-----------------:|------------:|---------:|
+| 1 030 strict     |   584 s          |   184 s     |   3.2×   |
+| 1 030 additive   |   286 s          |    57 s     |   5.0×   |
+| 1 609 additive   |  (~20 min, est.) |   2.7 min   |   ~7×    |
+
+Two rules of thumb: the gain **grows with tree size** (the dense `O(n³)` cost bites
+harder) and **with rate heterogeneity** (more binding ordering constraints → the
+dense QP churns while the sparse solver stays cheap). So expect ~3× on small,
+clock‑like data and ~15–30× on large or rate‑varying trees. It is a **constant
+factor, not an asymptotic win** — on real data ~30% of ordering constraints bind,
+so the solver stays `O(n³)`‑order (see "Scaling and limits"). The idealised "100×+"
+only appears on perfectly clock‑like trees where *no* constraints bind. On the
+degenerate large‑tree solves the dual pivot **converges directly** (it does not
+fall back to the dense solver — see "Scaling and limits").
 
 ## The bottleneck
 
@@ -63,37 +79,40 @@ Two observations make the problem sparse:
 
 ## The algorithm (`.optim.Ti5.sparse.activeset`)
 
-We solve the constrained QP with a primal **active‑set** method whose linear
-algebra is driven by a **single sparse factorisation** of the tree Laplacian
-`L = AᵀWA`, with the working‑set linear algebra maintained **incrementally**:
+We solve the constrained QP with a **Goldfarb–Idnani dual active‑set** method
+whose linear algebra is driven by a **single sparse factorisation** of the tree
+Laplacian `L = AᵀWA`:
 
 1. **Factor once.** Build `L` as a sparse matrix and factor it with a sparse
    Cholesky (`Matrix::Cholesky`, i.e. CHOLMOD). On a tree, the elimination tree
    has no fill‑in, so the factor is `O(n)` to compute and to apply. (This is the
    linear‑algebra equivalent of a post‑order Gaussian elimination that walks the
    tree from tips to root.)
-2. **Unconstrained solve.** `x0 = L⁻¹ c`, where `c = AᵀWB` is the right‑hand
-   side (`O(n)`).
-3. **Active‑set iterations.** Maintain a working set of binding constraints
-   `E x = f`, the matrix `Z = L⁻¹ Eᵀ`, and a Cholesky factor of the Schur matrix
-   `S = E Z` — all updated **one column at a time**:
-   - when a constraint enters, solve for its single new column of `Z` with one
-     `O(n)` sparse solve and extend the Schur factor by a **bordered rank‑1
-     update**; on the (rare) release, drop the column and refactor;
-   - solve the small dense Schur system `S μ = E x0 − f` for the multipliers `μ`
-     using the maintained factor;
-   - update `x = x0 − Z μ`;
-   - **add** the most‑violated inactive constraint, or **release** the
-     constraint with the most‑negative multiplier, and repeat.
-4. **Terminate** when no constraint is violated and all multipliers are
-   non‑negative (KKT satisfied).
+2. **Start dual‑feasible.** Begin at the unconstrained minimiser `x0 = L⁻¹ c`
+   (`c = AᵀWB`) with an empty active set — trivially dual‑feasible (all
+   multipliers zero).
+3. **Dual iterations.** Repeatedly pick the most‑violated constraint `p` and
+   raise its multiplier, keeping the active constraints tight and all multipliers
+   `≥ 0`. For the incoming row `aₚ` compute `wₐ = L⁻¹ aₚ` (one `O(n)` sparse
+   solve) and, against the active set, the primal step direction `z` and the dual
+   step direction `r = M⁻¹ (A_active wₐ)` — using a maintained Cholesky of the
+   Schur matrix `M = A_active L⁻¹ A_activeᵀ`. Then take the shorter of
+   - the **primal (full) step** `t₂ = viol / (aₚᵀz)` that makes `p` tight, after
+     which `p` enters the active set (append its column `wₐ`, extend the Schur
+     factor by a bordered update); or
+   - the **dual (partial) step** `t₁ = minₖ λₖ/rₖ` at which an active multiplier
+     reaches zero, after which that constraint is **dropped** — a constraint
+     *exchange* — and the same `p` is retried against the smaller active set.
+4. **Terminate** when no constraint is violated (multipliers are `≥ 0` by
+   construction) — the KKT conditions hold, so `x` is the feasible optimum.
 
-Because each add/drop touches one column, a step costs one sparse solve plus
-`O(#active²)` dense work, rather than re‑solving all `#active` columns and an
-`O(#active³)` dense system from scratch every step. The tree factor is reused
-across all active‑set iterations. For tree node‑ordering constraints the active
-set is, in practice, **monotonic** — constraints enter and stay — so the release
-path is essentially never exercised.
+The exchange in step 3 is what makes this robust. When the incoming constraint is
+linearly dependent on the active set (`aₚᵀz ≤ 0` — a degenerate, rank‑deficient
+active set) the primal step is infinite, so the method instead drops a blocking
+constraint and proceeds, always reaching the true optimum. A plain *primal*
+active‑set has no such move and must give up (fall back to the dense solver) on
+exactly those instances. Each step costs one `O(n)` sparse solve plus `O(#active²)`
+dense work, and the tree factor is reused throughout.
 
 ## Scaling and limits
 
@@ -110,25 +129,23 @@ data (empirically the per‑solve time scales ~`n^2.3`). So on real data this is
   it no faster (or slightly slower) than the dense solver, but the node‑time
   solve is not a repeated hot path there, so it does not matter. The win shows up
   from ~500–1 000 tips upward.
-- **Degeneracy → fallback.** When many constraints bind they can become linearly
-  dependent; the bordered Cholesky detects this the moment such a constraint would
-  enter (`ρ² ≤ 0`), the solver returns `NULL`, and the caller falls back to the
-  dense `quadprog` solve. On the real subtype‑C tree this starts to appear around
-  ~4 000 tips, but it is **sporadic and instance‑dependent**, not a hard threshold:
-  a 4 500‑tip subsample converges (in ~33 s) while the 4 000‑ and 5 000‑tip
-  subsamples fall back. Two distinct costs: the incremental factor makes the
-  *failed sparse attempt* cheap (it bails in seconds rather than churning for
-  minutes), but the dense `quadprog` solve it then falls back to is still a full
-  `O(n³)` solve and dominates that node‑time step. Failing fast saves the wasted
-  attempt; it does not make the fallback solve cheap.
+- **Degeneracy — handled, no longer a fallback.** When many constraints bind they
+  can become linearly dependent (a rank‑deficient active set, a genuine LICQ
+  failure). The dual method handles this directly through the constraint
+  *exchange* in step 3: it drops a blocking constraint and continues to the true
+  feasible optimum. On the real subtype‑C tree the degeneracy appears sporadically
+  from ~4 000 tips upward (e.g. the 4 000‑ and 5 000‑tip subsamples), and the dual
+  solver converges on them at roughly the non‑degenerate sparse speed — **~14×
+  faster than the dense fallback it replaces** (26 s vs ~370 s at 4 000 tips),
+  staying feasible and matching `quadprog` to ~1e‑12.
 
-  Falling back is deliberate. A degenerate active set is a genuine LICQ failure
-  that a robust *dual* QP method (`quadprog`'s Goldfarb‑Idnani) handles correctly.
-  Simply regularising the Schur to push through the degeneracy was tried and
-  **produces infeasible node times** (parent younger than child, error growing
-  with `n`) — so the sparse solver hands these instances to `quadprog` rather than
-  return a wrong answer. Making the sparse path itself robust to degeneracy would
-  require a proper sparse dual pivot (a larger project).
+  This is why the method is a *dual* active‑set. The previous *primal* version
+  detected the degeneracy (`ρ² ≤ 0`) but had to fall back to a full dense
+  `quadprog` solve; and a cheaper attempt — regularising the Schur to push
+  through — **produced infeasible node times** (parent younger than child, error
+  growing with `n`). `quadprog` remains only as the ultimate backstop for the
+  unlikely cases where the sparse factor is singular or the **Matrix** package is
+  unavailable.
 
 ## The API option
 

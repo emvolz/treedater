@@ -281,23 +281,24 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	unname( quadprog::solve.QP( Dmat, cvec, Amat = -t(td$Ain), bvec = -td$bin )$solution )
 }
 
-# Sparse Schur-complement ACTIVE-SET for the ti5 node-time QP (clsSolver="sparse", the
+# Sparse GOLDFARB-IDNANI dual active-set for the ti5 node-time QP (clsSolver="sparse", the
 # default).
 #
 # The weighted normal-equations matrix A'WA is a weighted TREE LAPLACIAN (each edge
 # contributes <=2 non-zeros per row), and the node-ordering constraints Ain x <= bin
-# (parent time <= child/tip time) are single edge rows. So instead of the dense O(n^3)
-# QP (which forms A'A and solves a dense QP every coordinate-descent iteration) we:
+# (parent time <= child/tip time) are single edge rows. So instead of forming A'A and
+# solving a dense O(n^3) QP every coordinate-descent iteration we:
 #   * factor the sparse tree Laplacian L = A'WA ONCE with a sparse Cholesky (CHOLMOD via
 #     the Matrix package finds the tree's perfect elimination ordering -> O(n), no fill),
-#   * apply L^-1 to the rhs, and maintain Z = L^-1 E' one column at a time as constraints
-#     enter the active set (each new column is one O(n) sparse solve),
-#   * maintain a Cholesky factor of the small dense |active| x |active| Schur system by a
-#     bordered rank-1 update (refactored only on the rare constraint release),
-#   * add the most-violated constraint / release a negative multiplier each step
-#     (a standard primal active-set).
-# Cost is O(n * #active) instead of O(n^3). Returns NULL (caller falls back to the dense
-# quadprog solver) if Matrix is unavailable, the factor is singular, or it fails to converge.
+#   * run a DUAL active-set from the unconstrained solution x0 = L^-1 A'WB, bringing in the
+#     most-violated constraint by raising its multiplier; each step applies L^-1 to one
+#     constraint column (an O(n) sparse solve) and updates a small dense Schur factor,
+#   * on a linearly-dependent (degenerate) active set it takes a partial dual step and
+#     EXCHANGES a constraint (drops the blocking one) instead of failing -- so, unlike a
+#     plain primal active-set, it always converges to the true KKT point (feasible optimum)
+#     even when many constraints bind, rather than falling back to the dense solver.
+# Returns NULL (caller falls back to the dense quadprog solver) only if Matrix is
+# unavailable, the factor is singular, or it fails to converge within the iteration cap.
 .optim.Ti5.sparse.activeset <- function(omegas, td){
 	if (!requireNamespace('Matrix', quietly = TRUE)) return(NULL)
 	tre <- td$tre; n <- td$n; p <- n - 1L
@@ -340,57 +341,58 @@ sampleYearsFromLabels <- function(tips, dateFormat='%Y-%m-%d'
 	evec <- function(k){ e <- numeric(p); e[parcol[k]] <- 1; if (!is.na(childcol[k])) e[childcol[k]] <- -1; e }
 
 	x0 <- as.numeric(solveL(cvec))
-	active <- integer(0); tol <- 1e-9
-	# INCREMENTAL active-set: maintain Z = L^-1 E' one column at a time and a Cholesky
-	# factor R of the Schur matrix S = E Z (bordered rank-1 update on add, refactor on the
-	# rare release), so each step costs ONE sparse solve + O(#active^2) instead of
-	# re-solving all #active columns and an O(#active^3) dense system from scratch every step.
-	Z <- matrix(0, p, 0)      # columns L^-1 e_k, one per active constraint
-	R <- matrix(0, 0, 0)      # upper Cholesky of S:  crossprod(R) == S
-	for (it in seq_len(ne + 5L)){
-		m <- length(active)
-		if (m == 0L){
-			x <- x0; mult <- numeric(0)
-		} else {
-			rs <- vapply(active, function(k) row_val(k, x0) - binv[k], numeric(1))
-			mu <- backsolve(R, backsolve(R, rs, transpose = TRUE))   # S mu = rs  via S = R'R
-			x  <- x0 - as.numeric(Z %*% mu); mult <- mu
-		}
+	# Dual active-set state: primal x, active constraint indices, multipliers lam >= 0,
+	# the columns Za = L^-1 a_j for active j, and a Cholesky factor Rm of the Schur matrix
+	# M = A_active L^-1 A_active' (crossprod(Rm) == M).
+	x <- x0; active <- integer(0); lam <- numeric(0)
+	Za <- matrix(0, p, 0); M <- matrix(0, 0, 0); Rm <- matrix(0, 0, 0)
+	tol <- 1e-9; eps <- 1e-11; maxit <- 6L * ne + 50L; nit <- 0L
+	for (outer in seq_len(maxit)){
 		# most-violated inactive constraint  (Ain x - bin > 0)
 		lhs <- x[parcol]; lhs[ni] <- lhs[ni] - x[childcol[ni]]
-		viol <- lhs - binv; viol[active] <- -Inf
+		viol <- lhs - binv; if (length(active)) viol[active] <- -Inf
 		kb <- which.max(viol)
-		if (length(kb) && viol[kb] > tol){
-			# ADD constraint kb: one sparse solve for its column + bordered Cholesky update
-			z <- as.numeric(solveL(evec(kb))); d <- row_val(kb, z)
-			if (m == 0L){
-				if (d <= 0) return(NULL)
-				R <- matrix(sqrt(d), 1, 1)
-			} else {
-				s <- vapply(active, function(k) row_val(k, z), numeric(1))
-				r <- backsolve(R, s, transpose = TRUE); rho2 <- d - sum(r * r)
-				if (rho2 <= 0) return(NULL)          # constraint (nearly) dependent -> fall back
-				R <- rbind(cbind(R, r), c(rep(0, m), sqrt(rho2)))
-			}
-			Z <- cbind(Z, z); active <- c(active, kb); next
+		if (!length(kb) || viol[kb] <= tol){         # no violation + lam >= 0  ->  KKT optimal
+			ztol <- sqrt(.Machine$double.eps); x[abs(x) < ztol] <- 0
+			return(x)
 		}
-		# release the most-negative multiplier
-		if (m > 0L){
-			mn <- which.min(mult)
-			if (mult[mn] < -tol){
-				active <- active[-mn]; Z <- Z[, -mn, drop = FALSE]
-				if (length(active) == 0L){ R <- matrix(0, 0, 0) }
+		wa  <- as.numeric(solveL(evec(kb)))          # L^-1 a_kb  (one O(n) sparse solve)
+		dpp <- row_val(kb, wa)                        # a_kb' L^-1 a_kb  (> 0)
+		lam_p <- 0
+		repeat {                                      # raise lam_kb until kb is tight or a drop
+			nit <- nit + 1L; if (nit > maxit) return(NULL)
+			m <- length(active)
+			if (m == 0L){ s <- numeric(0); r <- numeric(0); zdir <- wa; rho2 <- dpp }
+			else {
+				s    <- vapply(active, function(k) row_val(k, wa), numeric(1))  # M's kb-column
+				r    <- backsolve(Rm, backsolve(Rm, s, transpose = TRUE))       # M^-1 s : dual dir
+				zdir <- wa - as.numeric(Za %*% r)                              # primal dir
+				rho2 <- dpp - sum(s * r)                                       # a_kb' zdir  (Schur)
+			}
+			viol_p <- row_val(kb, x) - binv[kb]
+			t2 <- if (rho2 > eps) viol_p / rho2 else Inf     # primal (full) step: make kb tight
+			t1 <- Inf; kdrop <- 0L                           # dual (partial) step: a lam hits 0
+			if (m > 0L){
+				pos <- which(r > eps)
+				if (length(pos)){ ra <- lam[pos] / r[pos]; wi <- which.min(ra); t1 <- ra[wi]; kdrop <- pos[wi] }
+			}
+			tt <- min(t1, t2); if (!is.finite(tt)) return(NULL)   # primal infeasible (should not happen)
+			x <- x - tt * zdir; if (m > 0L) lam <- lam - tt * r; lam_p <- lam_p + tt
+			if (t2 <= t1){                                # FULL step: kb becomes active
+				if (m == 0L){ M <- matrix(dpp, 1, 1); Rm <- matrix(sqrt(dpp), 1, 1) }
 				else {
-					S <- matrix(0, length(active), length(active))
-					for (a in seq_along(active)) S[a, ] <- vapply(active, function(k) row_val(k, Z[, a]), numeric(1))
-					R <- tryCatch(chol(S), error = function(e) NULL)
-					if (is.null(R)) return(NULL)
+					rr <- backsolve(Rm, s, transpose = TRUE)
+					M  <- rbind(cbind(M, s), c(s, dpp))
+					Rm <- rbind(cbind(Rm, rr), c(rep(0, m), sqrt(max(rho2, eps))))
 				}
-				next
+				Za <- cbind(Za, wa); active <- c(active, kb); lam <- c(lam, lam_p); break
+			} else {                                      # PARTIAL step: EXCHANGE - drop constraint kdrop
+				active <- active[-kdrop]; lam <- lam[-kdrop]; Za <- Za[, -kdrop, drop = FALSE]
+				M  <- M[-kdrop, -kdrop, drop = FALSE]
+				Rm <- if (nrow(M) == 0L) matrix(0, 0, 0) else tryCatch(chol(M), error = function(e) NULL)
+				if (is.null(Rm)) return(NULL)
 			}
 		}
-		ztol <- sqrt(.Machine$double.eps); x[abs(x) < ztol] <- 0
-		return(x)
 	}
 	NULL
 }
