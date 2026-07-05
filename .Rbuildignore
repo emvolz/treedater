@@ -13,3 +13,7 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^CRAN-SUBMISSION$
+^notes$
+^test0\.R$
+^\.claude$
+^\.claude/.*$
